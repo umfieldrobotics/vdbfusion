@@ -149,6 +149,8 @@ KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
     poses_ = GetGTPoses(kitti_root_dir_ / "poses" / std::string(sequence + ".txt"),
                         kitti_sequence_dir / "calib.txt");
     scan_files_ = GetVelodyneFiles(fs::absolute(kitti_sequence_dir / "velodyne/"), n_scans);
+
+    // semantics_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "labels/"), n_scans);
 }
 
 KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,

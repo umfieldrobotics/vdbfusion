@@ -70,6 +70,11 @@ VDBVolume::VDBVolume(float voxel_size, float sdf_trunc, bool space_carving /* = 
     weights_->setName("W(x): weights grid");
     weights_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
     weights_->setGridClass(openvdb::GRID_UNKNOWN);
+
+    semantics_ = openvdb::FloatGrid::create(0.0f);
+    semantics_->setName("A(x): semantics grid");
+    semantics_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
+    semantics_->setGridClass(openvdb::GRID_UNKNOWN);
 }
 
 void VDBVolume::UpdateTSDF(const float& sdf,

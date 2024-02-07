@@ -73,6 +73,7 @@ public:
     /// OpenVDB Grids modeling the signed distance field and the weight grid
     openvdb::FloatGrid::Ptr tsdf_;
     openvdb::FloatGrid::Ptr weights_;
+    openvdb::FloatGrid::Ptr semantics_;
 
     /// VDBVolume public properties
     float voxel_size_;
