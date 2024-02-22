@@ -119,8 +119,10 @@ int main(int argc, char* argv[]) {
 
     // Run marching cubes and save a .ply file
     {
+        // for semantics, we will save one mesh for each label--28 in total. the label will be associated with the face. TODO discuss this further
+        // triangles[0-2] is for map, triangles[3] is label?
         timers::ScopeTimer timer("Writing Mesh to disk");
-        auto [vertices, triangles] =
+        auto [vertices, triangles, labels] = // labels belong to triangles
             tsdf_volume.ExtractTriangleMesh(vdbfusion_cfg.fill_holes_, vdbfusion_cfg.min_weight_);
 
         // TODO: Fix this!
@@ -130,12 +132,33 @@ int main(int argc, char* argv[]) {
         }
 
         // TODO: Also this
-        Eigen::MatrixXi F(triangles.size(), 3);
+        // We want a list of matrices, one for each label
+        std::map<uint16_t, Eigen::MatrixXi> tri_map; // label: (matrix, #elements)
+        std::map<uint16_t, int32_t> tri_map_sizes; // label: (matrix, #elements)
+
         for (size_t i = 0; i < triangles.size(); i++) {
-            F.row(i) = Eigen::VectorXi::Map(&triangles[i][0], triangles[i].size());
+            if (tri_map.find(labels[i]) == tri_map.end()) {
+                Eigen::MatrixXi F(triangles.size(), 3);
+                tri_map[labels[i]] = F;
+                tri_map_sizes[labels[i]] = 0;
+            }
+            auto curr_num_triangles = tri_map_sizes[labels[i]];
+            tri_map[labels[i]].row(curr_num_triangles) = Eigen::VectorXi::Map(&triangles[i][0], triangles[i].size());
+            tri_map_sizes[labels[i]]++;
         }
-        std::string filename = fmt::format("{map_name}.ply", "map_name"_a = map_name);
-        igl::write_triangle_mesh(filename, V, F, igl::FileEncoding::Binary);
+
+        // Now iterate through the map and save each mesh
+        for (auto const& [class_label, matrix] : tri_map) {
+            std::string filename = fmt::format("{map_name}_{class_label}.ply", fmt::arg("map_name", map_name), fmt::arg("class_label", class_label));
+            // truncate matrix so it's just the number of triangles
+            auto num_triangles = tri_map_sizes[class_label];
+            Eigen::MatrixXi new_matrix(num_triangles, 3);
+            for (size_t i = 0; i < num_triangles; i++) {
+                new_matrix.row(i) = matrix.row(i);
+            }
+            igl::write_triangle_mesh(filename, V, new_matrix, igl::FileEncoding::Ascii);
+        }
+        
     }
 
     return 0;

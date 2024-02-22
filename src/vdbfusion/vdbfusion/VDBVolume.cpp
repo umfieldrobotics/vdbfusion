@@ -157,7 +157,6 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
                 tsdf_acc.setValue(voxel, new_tsdf);
                 weights_acc.setValue(voxel, new_weight);
                 labels_acc.setValue(voxel, labels[idx]); // eventually change this to one-hot?
-                std::cout << voxel << " " << labels[idx] << std::endl;
             }
         } while (dda.step());
     });

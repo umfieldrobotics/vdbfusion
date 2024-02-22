@@ -72,7 +72,7 @@ public:
     openvdb::FloatGrid::Ptr Prune(float min_weight) const;
 
     /// @brief Extracts a TriangleMesh as the iso-surface in the actual volume
-    [[nodiscard]] std::tuple<std::vector<Eigen::Vector3d>, std::vector<Eigen::Vector3i>>
+    [[nodiscard]] std::tuple<std::vector<Eigen::Vector3d>, std::vector<Eigen::Vector3i>, std::vector<uint16_t>>
     ExtractTriangleMesh(bool fill_holes = true, float min_weight = 0.5) const;
 
 public:
