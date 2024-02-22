@@ -54,6 +54,24 @@ std::vector<std::string> GetVelodyneFiles(const fs::path& velodyne_path, int n_s
     return velodyne_files;
 }
 
+std::vector<std::string> GetLabelFiles(const fs::path& label_path, int n_scans) {
+    std::vector<std::string> label_files;
+    for (const auto& entry : fs::directory_iterator(label_path)) {
+        if (entry.path().extension() == ".txt") {
+            label_files.emplace_back(entry.path().string());
+        }
+    }
+    if (label_files.empty()) {
+        std::cerr << label_path << "path doesn't have any .lbl" << std::endl;
+        exit(1);
+    }
+    std::sort(label_files.begin(), label_files.end());
+    if (n_scans > 0) {
+        label_files.erase(label_files.begin() + n_scans, label_files.end());
+    }
+    return label_files;
+}
+
 std::vector<Eigen::Vector3d> ReadKITTIVelodyne(const std::string& path) {
     std::ifstream scan_input(path.c_str(), std::ios::binary);
     assert(scan_input.is_open() && "ReadPointCloud| not able to open file");
@@ -74,6 +92,23 @@ std::vector<Eigen::Vector3d> ReadKITTIVelodyne(const std::string& path) {
         points[i].z() = values[i * 4 + 2];
     }
     return points;
+}
+
+std::vector<uint16_t> ReadKITTISemantics(const std::string& path) {
+    // Load semantics info from text file
+    std::ifstream infile(path.c_str()); // Open the input file
+    assert(infile.is_open() && "ReadKITTISemantics| not able to open file");
+
+    std::vector<uint16_t> labels; // Vector to store uint16_t numbers
+    std::string line;
+
+    while (std::getline(infile,line)) {
+        labels.push_back(std::stoi(line)); // Add it to the vector
+    }
+
+    infile.close(); // Close the file
+
+    return labels;
 }
 
 void PreProcessCloud(std::vector<Eigen::Vector3d>& points, float min_range, float max_range) {
@@ -171,10 +206,13 @@ KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
     poses_ = GetGTPoses(kitti_root_dir_ / "poses" / std::string(sequence + ".txt"),
                         kitti_sequence_dir / "calib.txt");
     scan_files_ = GetVelodyneFiles(fs::absolute(kitti_sequence_dir / "velodyne/"), n_scans);
+    label_files_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "labels_txt/"), n_scans);
 }
 
 std::tuple<std::vector<Eigen::Vector3d>, Eigen::Vector3d> KITTIDataset::operator[](int idx) const {
     std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
+    std::vector<uint16_t> semantics = ReadKITTISemantics(label_files_[idx]);
+
     if (preprocess_) PreProcessCloud(points, min_range_, max_range_);
     if (apply_pose_) TransformPoints(points, poses_[idx]);
     const Eigen::Vector3d origin = poses_[idx].block<3, 1>(0, 3);

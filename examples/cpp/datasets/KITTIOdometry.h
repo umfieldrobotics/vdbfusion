@@ -59,6 +59,7 @@ public:
 
 private:
     std::vector<std::string> scan_files_;
+    std::vector<std::string> label_files_;
     std::vector<Eigen::Matrix4d> poses_;
     std::vector<Eigen::Matrix<int, 1, 28>> semantics_;
 };
