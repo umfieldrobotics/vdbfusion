@@ -209,13 +209,13 @@ KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
     label_files_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "labels_txt/"), n_scans);
 }
 
-std::tuple<std::vector<Eigen::Vector3d>, Eigen::Vector3d> KITTIDataset::operator[](int idx) const {
+std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint16_t>, Eigen::Vector3d> KITTIDataset::operator[](int idx) const {
     std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
     std::vector<uint16_t> semantics = ReadKITTISemantics(label_files_[idx]);
 
-    if (preprocess_) PreProcessCloud(points, min_range_, max_range_);
+    // if (preprocess_) PreProcessCloud(points, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
     if (apply_pose_) TransformPoints(points, poses_[idx]);
     const Eigen::Vector3d origin = poses_[idx].block<3, 1>(0, 3);
-    return std::make_tuple(points, origin);
+    return std::make_tuple(points, semantics, origin);
 }
 }  // namespace datasets

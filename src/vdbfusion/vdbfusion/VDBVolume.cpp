@@ -105,6 +105,65 @@ void VDBVolume::Integrate(openvdb::FloatGrid::Ptr grid,
 }
 
 void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
+                          const std::vector<uint16_t>& labels,
+                          const Eigen::Vector3d& origin,
+                          const std::function<float(float)>& weighting_function) {
+    if (points.empty()) {
+        std::cerr << "PointCloud provided is empty\n";
+        return;
+    }
+
+    if (labels.empty()) {
+        std::cerr << "Semantic labels provided is empty\n";
+        return;
+    }
+
+    // Get some variables that are common to all rays
+    const openvdb::math::Transform& xform = tsdf_->transform();
+    const openvdb::Vec3R eye(origin.x(), origin.y(), origin.z());
+
+    // Get the "unsafe" version of the grid acessors
+    auto tsdf_acc = tsdf_->getUnsafeAccessor();
+    auto weights_acc = weights_->getUnsafeAccessor();
+    auto labels_acc = semantics_->getUnsafeAccessor();
+
+    // Launch an for_each execution, use std::execution::par to parallelize this region
+    std::for_each(points.cbegin(), points.cend(), [&](const auto& point) {
+        int idx = &point - &points[0];
+        // Get the direction from the sensor origin to the point and normalize it
+        const Eigen::Vector3d direction = point - origin;
+        openvdb::Vec3R dir(direction.x(), direction.y(), direction.z());
+        dir.normalize();
+
+        // Truncate the Ray before and after the source unless space_carving_ is specified.
+        const auto depth = static_cast<float>(direction.norm());
+        const float t0 = space_carving_ ? 0.0f : depth - sdf_trunc_;
+        const float t1 = depth + sdf_trunc_;
+
+        // Create one DDA per ray(per thread), the ray must operate on voxel grid coordinates.
+        const auto ray = openvdb::math::Ray<float>(eye, dir, t0, t1).worldToIndex(*tsdf_);
+        openvdb::math::DDA<decltype(ray)> dda(ray);
+        do {
+            const auto voxel = dda.voxel();
+            const auto voxel_center = GetVoxelCenter(voxel, xform);
+            const auto sdf = ComputeSDF(origin, point, voxel_center);
+            if (sdf > -sdf_trunc_) {
+                const float tsdf = std::min(sdf_trunc_, sdf);
+                const float weight = weighting_function(sdf);
+                const float last_weight = weights_acc.getValue(voxel);
+                const float last_tsdf = tsdf_acc.getValue(voxel);
+                const float new_weight = weight + last_weight;
+                const float new_tsdf = (last_tsdf * last_weight + tsdf * weight) / (new_weight);
+                tsdf_acc.setValue(voxel, new_tsdf);
+                weights_acc.setValue(voxel, new_weight);
+                labels_acc.setValue(voxel, labels[idx]); // eventually change this to one-hot?
+                std::cout << voxel << " " << labels[idx] << std::endl;
+            }
+        } while (dda.step());
+    });
+}
+
+void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
                           const Eigen::Vector3d& origin,
                           const std::function<float(float)>& weighting_function) {
     if (points.empty()) {

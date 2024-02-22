@@ -38,6 +38,12 @@ public:
     ~VDBVolume() = default;
 
 public:
+    /// @brief Integrates a new (globally aligned) PointCloud and its labels into the current
+    /// tsdf_ volume.
+    void Integrate(const std::vector<Eigen::Vector3d>& points,
+                   const std::vector<uint16_t>& labels,
+                   const Eigen::Vector3d& origin,
+                   const std::function<float(float)>& weighting_function);
     /// @brief Integrates a new (globally aligned) PointCloud into the current
     /// tsdf_ volume.
     void Integrate(const std::vector<Eigen::Vector3d>& points,
