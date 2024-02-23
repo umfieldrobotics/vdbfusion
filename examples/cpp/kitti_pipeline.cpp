@@ -133,8 +133,8 @@ int main(int argc, char* argv[]) {
 
         // TODO: Also this
         // We want a list of matrices, one for each label
-        std::map<uint16_t, Eigen::MatrixXi> tri_map; // label: (matrix, #elements)
-        std::map<uint16_t, int32_t> tri_map_sizes; // label: (matrix, #elements)
+        std::map<int, Eigen::MatrixXi> tri_map; // label: (matrix, #elements)
+        std::map<int, int32_t> tri_map_sizes; // label: (matrix, #elements)
 
         for (size_t i = 0; i < triangles.size(); i++) {
             if (tri_map.find(labels[i]) == tri_map.end()) {

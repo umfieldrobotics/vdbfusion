@@ -41,7 +41,7 @@ public:
     /// @brief Integrates a new (globally aligned) PointCloud and its labels into the current
     /// tsdf_ volume.
     void Integrate(const std::vector<Eigen::Vector3d>& points,
-                   const std::vector<uint16_t>& labels,
+                   const std::vector<int>& labels,
                    const Eigen::Vector3d& origin,
                    const std::function<float(float)>& weighting_function);
     /// @brief Integrates a new (globally aligned) PointCloud into the current
@@ -72,14 +72,14 @@ public:
     openvdb::FloatGrid::Ptr Prune(float min_weight) const;
 
     /// @brief Extracts a TriangleMesh as the iso-surface in the actual volume
-    [[nodiscard]] std::tuple<std::vector<Eigen::Vector3d>, std::vector<Eigen::Vector3i>, std::vector<uint16_t>>
+    [[nodiscard]] std::tuple<std::vector<Eigen::Vector3d>, std::vector<Eigen::Vector3i>, std::vector<int>>
     ExtractTriangleMesh(bool fill_holes = true, float min_weight = 0.5) const;
 
 public:
     /// OpenVDB Grids modeling the signed distance field and the weight grid
     openvdb::FloatGrid::Ptr tsdf_;
     openvdb::FloatGrid::Ptr weights_;
-    openvdb::FloatGrid::Ptr semantics_;
+    openvdb::Vec28IGrid::Ptr semantics_;
 
     /// VDBVolume public properties
     float voxel_size_;

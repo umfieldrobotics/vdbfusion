@@ -71,7 +71,7 @@ VDBVolume::VDBVolume(float voxel_size, float sdf_trunc, bool space_carving /* = 
     weights_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
     weights_->setGridClass(openvdb::GRID_UNKNOWN);
 
-    semantics_ = openvdb::FloatGrid::create(0.0f);
+    semantics_ = openvdb::Vec28IGrid::create(openvdb::Vec28i());
     semantics_->setName("A(x): semantics grid");
     semantics_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
     semantics_->setGridClass(openvdb::GRID_UNKNOWN);
@@ -105,7 +105,7 @@ void VDBVolume::Integrate(openvdb::FloatGrid::Ptr grid,
 }
 
 void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
-                          const std::vector<uint16_t>& labels,
+                          const std::vector<int>& labels,
                           const Eigen::Vector3d& origin,
                           const std::function<float(float)>& weighting_function) {
     if (points.empty()) {
@@ -156,7 +156,9 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
                 const float new_tsdf = (last_tsdf * last_weight + tsdf * weight) / (new_weight);
                 tsdf_acc.setValue(voxel, new_tsdf);
                 weights_acc.setValue(voxel, new_weight);
-                labels_acc.setValue(voxel, labels[idx]); // eventually change this to one-hot?
+                openvdb::Vec28i label_one_hot = openvdb::Vec28i(0);
+                label_one_hot[labels[idx]] = 1;
+                labels_acc.setValue(voxel, label_one_hot); // eventually change this to one-hot?
             }
         } while (dda.step());
     });

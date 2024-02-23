@@ -52,12 +52,12 @@ struct hash_eigen {
 }  // namespace
 
 namespace vdbfusion {
-std::tuple<std::vector<Eigen::Vector3d>, std::vector<Eigen::Vector3i>, std::vector<uint16_t>>
+std::tuple<std::vector<Eigen::Vector3d>, std::vector<Eigen::Vector3i>, std::vector<int>>
 VDBVolume::ExtractTriangleMesh(bool fill_holes, float min_weight) const {
     // implementation of marching cubes, based on Open3D
     std::vector<Eigen::Vector3d> vertices;
     std::vector<Eigen::Vector3i> triangles;
-    std::vector<uint16_t> tri_labels;
+    std::vector<int> tri_labels;
 
     double half_voxel_length = voxel_size_ * 0.5;
     // Map of "edge_index = (x, y, z, 0) + edge_shift" to "global vertex index"
@@ -119,9 +119,17 @@ VDBVolume::ExtractTriangleMesh(bool fill_holes, float min_weight) const {
             triangles.emplace_back(edge_to_index[tri_table[cube_index][i]],
                                    edge_to_index[tri_table[cube_index][i + 2]],
                                    edge_to_index[tri_table[cube_index][i + 1]]);
-            tri_labels.emplace_back(label);
+                                   
+            // go from one-hot label back to normal
+            int max_i = 0;
+            for (int i = 0; i < 28; i++) {
+                if (label[i] > label[max_i]) max_i = i;
+            }
+            tri_labels.emplace_back(max_i);
         }
     }
+
+
     return std::make_tuple(vertices, triangles, tri_labels);
 }
 
