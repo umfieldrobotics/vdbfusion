@@ -27,9 +27,15 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   find_package(VDBFusion REQUIRED)
 endif()
 
+set(CMAKE_CXX_FLAGS "-g") 
+
+set(BOOST_VERSION_REQUIRED "1.71.0")
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+
 find_package(TBB REQUIRED)
 
-find_library(cnpy++ ../../../cnpypp/build)
+find_package(OpenCV REQUIRED)
 
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -40,5 +46,5 @@ add_subdirectory(datasets)
 
 add_executable(kitti_pipeline kitti_pipeline.cpp)
 target_compile_features(kitti_pipeline PUBLIC cxx_std_11)
-target_link_libraries(kitti_pipeline PRIVATE TBB::tbb VDBFusion::vdbfusion argparse::argparse fmt::fmt igl::core datasets yaml-cpp cnpy++)
+target_link_libraries(kitti_pipeline PRIVATE TBB::tbb VDBFusion::vdbfusion argparse::argparse fmt::fmt igl::core datasets yaml-cpp)
 set_target_properties(kitti_pipeline PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
