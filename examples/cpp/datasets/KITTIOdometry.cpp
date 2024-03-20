@@ -32,6 +32,12 @@
 #include <string>
 #include <vector>
 
+#include <opencv2/opencv.hpp>
+
+#include "torch/torch.h"
+
+#include "open3d/Open3D.h"
+
 namespace fs = std::filesystem;
 
 namespace {
@@ -52,6 +58,24 @@ std::vector<std::string> GetVelodyneFiles(const fs::path& velodyne_path, int n_s
         velodyne_files.erase(velodyne_files.begin() + n_scans, velodyne_files.end());
     }
     return velodyne_files;
+}
+
+std::vector<std::string> GetDepthFiles(const fs::path& depth_path, int n_scans) {
+    std::vector<std::string> depth_files;
+    for (const auto& entry : fs::directory_iterator(depth_path)) {
+        if (entry.path().extension() == ".tif") {
+            depth_files.emplace_back(entry.path().string());
+        }
+    }
+    if (depth_files.empty()) {
+        std::cerr << depth_path << "path doesn't have any .tif" << std::endl;
+        exit(1);
+    }
+    std::sort(depth_files.begin(), depth_files.end());
+    if (n_scans > 0) {
+        depth_files.erase(depth_files.begin() + n_scans, depth_files.end());
+    }
+    return depth_files;
 }
 
 std::vector<std::string> GetLabelFiles(const fs::path& label_path, int n_scans) {
@@ -91,10 +115,84 @@ std::vector<Eigen::Vector3d> ReadKITTIVelodyne(const std::string& path) {
         points[i].y() = values[i * 4 + 1];
         points[i].z() = values[i * 4 + 2];
     }
+
+    return points; // returned in metric Velodyne coordinate frame
+}
+
+std::vector<Eigen::Vector3d> ReadKITTIDepth(const std::string& path, const fs::path& calib_file) {
+    // Read tiff
+    cv::Mat depth_mat = cv::imread(path, cv::IMREAD_UNCHANGED);
+
+    // Convert cv Mat to vector--figure out better way of doing this
+    std::vector<float> depth_data(depth_mat.size().width * depth_mat.size().height); // should only be one channel
+    for (size_t i = 0; i < depth_mat.size().height; i++) {
+        for (size_t j = 0; j < depth_mat.size().width; j++) {
+            depth_data[depth_mat.size().width*i+j] = float(depth_mat.at<double>(i, j, 0));
+        }
+    }
+
+    float fx = 1500.0; // 718.856;
+    float fy = 1500.0; // 718.856;
+    float cx = 607.1928;
+    float cy = 185.2157;
+
+    std::vector<Eigen::Vector3d> pc_points(depth_data.size()); // store the 3D points for creating the pointcloud
+
+    int num_rows = depth_mat.size().height;
+    int num_cols = depth_mat.size().width;
+    
+    for (size_t u = 0; u < num_rows; u++) {
+        for (size_t v = 0; v < num_cols; v++) {
+            size_t i = num_cols*u+v;
+
+            float z = depth_data[i];
+            if (z < 0 || std::isnan(z)) z = 0;
+            else if (z > 500) z = 500;
+
+            float x = (v - cx) * z / fx;
+            float y = (u - cy) * z / fy;
+
+            Eigen::Vector3d p {x, y, z};
+
+            pc_points[i] = p;
+        }
+    }
+
+    open3d::geometry::PointCloud pc = open3d::geometry::PointCloud(pc_points);
+
+    Eigen::Matrix4d T_cam_velo = Eigen::Matrix4d::Zero();
+    Eigen::Matrix4d T_velo_cam = Eigen::Matrix4d::Zero();
+
+    // auxiliary variables to read the txt files
+    std::string ss;
+    float P_00, P_01, P_02, P_03, P_10, P_11, P_12, P_13, P_20, P_21, P_22, P_23;
+
+    std::ifstream calib_in(calib_file, std::ios_base::in);
+    // clang-format off
+    while (calib_in >> ss >>
+           P_00 >> P_01 >> P_02 >> P_03 >>
+           P_10 >> P_11 >> P_12 >> P_13 >>
+           P_20 >> P_21 >> P_22 >> P_23) {
+        if (ss == "Tr:") {
+            T_cam_velo << P_00, P_01, P_02, P_03,
+                          P_10, P_11, P_12, P_13,
+                          P_20, P_21, P_22, P_23,
+                          0.00, 0.00, 0.00, 1.00;
+            T_velo_cam = T_cam_velo.inverse(); // T_velo_cam is from camera to velodyne
+        }
+    }
+    // clang-format on
+    
+    std::vector<Eigen::Vector3d> points = pc.points_;
+
+    // run the KITTI image through a semantic instance segmentation network to get pixel-wise labels, then project those into 3D space and add to pointcloud
+    
+
+
     return points;
 }
 
-std::vector<int> ReadKITTISemantics(const std::string& path) {
+std::vector<int> ReadKITTIGroundTruthLabels(const std::string& path) {
     // Load semantics info from text file
     std::ifstream infile(path.c_str()); // Open the input file
     assert(infile.is_open() && "ReadKITTISemantics| not able to open file");
@@ -164,10 +262,11 @@ std::vector<Eigen::Matrix4d> GetGTPoses(const fs::path& poses_file, const fs::pa
              P_10, P_11, P_12, P_13,
              P_20, P_21, P_22, P_23,
              0.00, 0.00, 0.00, 1.00;
-        poses.emplace_back(T_velo_cam * P * T_cam_velo);
+        poses.emplace_back(T_velo_cam * P);
+        // poses.emplace_back(T_velo_cam * P * T_cam_velo); IF FROM VELODYNE
     }
     // clang-format on
-    return poses;
+    return poses; // in velodyne coordinate frame
 }
 
 }  // namespace
@@ -184,8 +283,6 @@ KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
     poses_ = GetGTPoses(kitti_root_dir_ / "poses" / std::string(sequence + ".txt"),
                         kitti_sequence_dir / "calib.txt");
     scan_files_ = GetVelodyneFiles(fs::absolute(kitti_sequence_dir / "velodyne/"), n_scans);
-
-    // semantics_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "labels/"), n_scans);
 }
 
 KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
@@ -206,11 +303,13 @@ KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
     poses_ = GetGTPoses(kitti_root_dir_ / "poses" / std::string(sequence + ".txt"),
                         kitti_sequence_dir / "calib.txt");
     scan_files_ = GetVelodyneFiles(fs::absolute(kitti_sequence_dir / "velodyne/"), n_scans);
+    depth_files_ = GetDepthFiles(fs::absolute(kitti_sequence_dir / "depth_tif/"), n_scans);
     label_files_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "labels_txt/"), n_scans);
 }
 
 std::tuple<std::vector<Eigen::Vector3d>, std::vector<int>, Eigen::Vector3d> KITTIDataset::operator[](int idx) const {
-    std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
+    // std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
+    std::vector<Eigen::Vector3d> points = ReadKITTIDepth(depth_files_[idx], "/home/anjashep-frog-lab/Research/vdbfusion_mapping/vdbfusion/examples/notebooks/semantic-kitti-odometry/dataset/sequences/00/calib.txt");
     std::vector<int> semantics = ReadKITTISemantics(label_files_[idx]);
 
     // if (preprocess_) PreProcessCloud(points, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels

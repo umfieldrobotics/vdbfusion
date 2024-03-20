@@ -156,9 +156,9 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
                 const float new_tsdf = (last_tsdf * last_weight + tsdf * weight) / (new_weight);
                 tsdf_acc.setValue(voxel, new_tsdf);
                 weights_acc.setValue(voxel, new_weight);
-                openvdb::Vec28i label_one_hot = labels_acc.getValue(voxel);
-                label_one_hot[labels[idx]]++; // increase index for most recent label
-                labels_acc.setValue(voxel, label_one_hot);
+                // openvdb::Vec28i label_one_hot = labels_acc.getValue(voxel);
+                // label_one_hot[labels[idx]]++; // increase index for most recent label
+                // labels_acc.setValue(voxel, label_one_hot);
             }
         } while (dda.step());
     });

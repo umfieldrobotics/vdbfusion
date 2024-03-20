@@ -36,6 +36,8 @@
 #include "utils/Iterable.h"
 #include "utils/Timers.h"
 
+#include "open3d/Open3D.h"
+
 // Namespace aliases
 using namespace fmt::literals;
 using namespace utils;
