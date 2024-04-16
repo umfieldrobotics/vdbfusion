@@ -24,8 +24,9 @@
 FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu20.04
 
 # setup environment
-#ENV TERM xterm
-#ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=US
+ENV TERM xterm
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install essentials
 RUN apt-get update && apt-get install --no-install-recommends -y \
