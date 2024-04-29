@@ -76,8 +76,8 @@ WORKDIR /
 RUN apt-get update && apt-get install -y wget git ssh libfreetype6 libfreetype6-dev libharfbuzz-dev
 RUN git clone https://github.com/opencv/opencv_contrib.git --branch 4.6.0
 RUN git clone https://github.com/opencv/opencv.git --branch 4.6.0
-RUN cd /opencv && \
-    mkdir build && \
+RUN cd /opencv
+RUN mkdir build && \
     cd build && \
     cmake -D CMAKE_BUILD_TYPE=RELEASE \
       -D OPENCV_GENERATE_PKGCONFIG=ON \
@@ -92,5 +92,9 @@ RUN cd /opencv && \
 
 RUN useradd -m docker && echo "docker:docker" | chpasswd && adduser docker sudo
 
+ENV TERM xterm-256color
+CMD ["bash", "-l"]
+
 USER docker
 CMD /bin/bash
+
