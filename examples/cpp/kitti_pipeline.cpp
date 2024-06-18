@@ -30,13 +30,173 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+ 
 
 #include "datasets/KITTIOdometry.h"
 #include "utils/Config.h"
 #include "utils/Iterable.h"
 #include "utils/Timers.h"
+// #include "nanovdb/examples/ex_raytrace_level_set/nanovdb.cu"
+#include <nanovdb/util/Ray.h> 
+#include "common.h"
+#include <nanovdb/util/HDDA.h>
+
+#include <nanovdb/util/IO.h>
 
 #include "open3d/Open3D.h"
+
+  // Now iterate through the map and save each mesh
+//-------modifiction 
+#include <nanovdb/util/IO.h>
+#include <nanovdb/util/Primitives.h>
+#include <nanovdb/util/CudaDeviceBuffer.h>
+#include <nanovdb/NanoVDB.h>
+#include <nanovdb/util/OpenToNanoVDB.h>
+
+#include <sstream>
+#include <vector>
+#include <chrono>
+
+//------------------------------
+
+#if defined(NANOVDB_USE_CUDA)
+using BufferT = nanovdb::CudaDeviceBuffer;
+#else
+using BufferT = nanovdb::HostBuffer;
+#endif
+
+void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int width, int height, BufferT& imageBuffer, int index, const datasets::KITTIDataset::Point &origin)
+{ 
+    using GridT = nanovdb::FloatGrid;
+    using CoordT = nanovdb::Coord;
+    using RealT = float;
+    using Vec3T = nanovdb::Vec3<RealT>;
+    using RayT = nanovdb::Ray<RealT>;
+
+    auto* h_grid = handle.grid<float>();
+    if (!h_grid)
+        throw std::runtime_error("GridHandle does not contain a valid host grid");
+
+    float* h_outImage = reinterpret_cast<float*>(imageBuffer.data());
+
+    float              wBBoxDimZ = (float)h_grid->worldBBox().dim()[2] * 2;
+    Vec3T              wBBoxCenter = Vec3T(h_grid->worldBBox().min() + h_grid->worldBBox().dim() * 0.5f);
+    nanovdb::CoordBBox treeIndexBbox = h_grid->tree().bbox();
+    std::cout << "Bounds: "
+              << "[" << treeIndexBbox.min()[0] << "," << treeIndexBbox.min()[1] << "," << treeIndexBbox.min()[2] << "] -> ["
+              << treeIndexBbox.max()[0] << "," << treeIndexBbox.max()[1] << "," << treeIndexBbox.max()[2] << "]" << std::endl;
+
+    RayGenOp<Vec3T> rayGenOp(wBBoxDimZ, wBBoxCenter);
+    CompositeOp     compositeOp;
+
+    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, &origin] __hostdev__(int start, int end, float* image, const GridT* grid) {
+        // get an accessor.
+        auto acc = grid->tree().getAccessor();
+
+        for (int i = start; i < end; ++i) {
+            Vec3T rayEye; 
+            Vec3T rayDir;
+            rayGenOp(i, width, height, rayEye, rayDir);
+
+
+            //modification--------------------------------------------------------
+            //chang the ray direction from nagative z direction to the positive x direction 
+            double rotationMatrix[3][3] = {
+                {0, 0, 1},
+                {1, 0, 0},
+                {0, 1, 0}
+            };
+            double x = rayDir[0];
+            double y = rayDir[1];
+            double z = rayDir[2];
+            rayDir[0] = rotationMatrix[0][0] * x + rotationMatrix[0][1] * y + rotationMatrix[0][2] * z;
+            rayDir[1] = rotationMatrix[1][0] * x + rotationMatrix[1][1] * y + rotationMatrix[1][2] * z;
+            rayDir[2] = rotationMatrix[2][0] * x + rotationMatrix[2][1] * y + rotationMatrix[2][2] * z;
+ 
+            rayEye[0] = origin(0); 
+            rayEye[1] = origin(1); 
+            rayEye[2] = origin(2); 
+
+            //modification--------------------------------------------------------
+
+            // generate ray.
+            RayT wRay(rayEye, rayDir);
+            
+             
+        
+            // transform the ray to the grid's index-space.
+            RayT iRay = wRay.worldToIndexF(*grid);
+            // intersect...
+            float  t0;
+            CoordT ijk;
+            float  v;
+            if (nanovdb::ZeroCrossing(iRay, acc, ijk, v, t0)) {
+                // write distance to surface. (we assume it is a uniform voxel)
+                float wT0 = t0 * float(grid->voxelSize()[0]);
+                compositeOp(image, i, width, height, wT0 / (wBBoxDimZ * 2), 1.0f);
+            } else {
+                // write background value.
+                compositeOp(image, i, width, height, 0.0f, 0.0f);
+ 
+            }
+        }
+    };
+
+    {   
+
+        auto start3 = std::chrono::high_resolution_clock::now();
+        // float durationAvg = 0;
+        // for (int i = 0; i < numIterations; ++i) {
+        //     float duration = renderImage(false, renderOp, width, height, h_outImage, h_grid);
+        //     //std::cout << "Duration(NanoVDB-Host) = " << duration << " ms" << std::endl;
+        //     durationAvg += duration;
+        // }
+        // durationAvg /= numIterations;
+        // std::cout << "Average Duration(NanoVDB-Host) = " << durationAvg << " ms" << std::endl;
+
+        // std::ostringstream filename;
+        // filename << "loop_output" << index << ".pfm";
+
+        // saveImage(filename.str(), width, height, (float*)imageBuffer.data());
+        auto end3 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
+        std::cout << "save the image took: " << elapsed3.count() << " ms" << std::endl;
+
+    }
+
+#if defined(NANOVDB_USE_CUDA)
+    handle.deviceUpload();
+
+    auto* d_grid = handle.deviceGrid<float>();
+    if (!d_grid)
+        throw std::runtime_error("GridHandle does not contain a valid device grid");
+
+    imageBuffer.deviceUpload();
+    float* d_outImage = reinterpret_cast<float*>(imageBuffer.deviceData());
+
+    {
+        float durationAvg = 0;
+        for (int i = 0; i < numIterations; ++i) {
+            float duration = renderImage(true, renderOp, width, height, d_outImage, d_grid);
+            //std::cout << "Duration(NanoVDB-Cuda) = " << duration << " ms" << std::endl;
+            durationAvg += duration;
+        }
+        durationAvg /= numIterations;
+        std::cout << "Average Duration(NanoVDB-Cuda) = " << durationAvg << " ms" << std::endl;
+
+        imageBuffer.deviceDownload();
+        saveImage("raytrace_level_set-nanovdb-cuda.pfm", width, height, (float*)imageBuffer.data());
+    }
+#endif
+}
+
+// // nanovdb.cu function--------------------------------------------------------------------------
+
+
+
+
+
+
 
 // Namespace aliases
 using namespace fmt::literals;
@@ -68,32 +228,60 @@ argparse::ArgumentParser ArgParse(int argc, char* argv[]) {
         exit(0);
     }
 
-    auto kitti_root_dir = argparser.get<std::string>("kitti_root_dir");
+    auto kitti_root_dir = argparser.get<std::string>("kitti_root_dir"); 
     if (!fs::exists(kitti_root_dir)) {
         std::cerr << kitti_root_dir << "path doesn't exists" << std::endl;
         exit(1);
     }
+    
+    std::cout<< " the direction: " << kitti_root_dir << std::endl;
     return argparser;
 }
 }  // namespace
 
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+extern void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int width, int height, BufferT& imageBuffer);
+
+
+
+
+
+
+
+
+
+
 int main(int argc, char* argv[]) {
+
+    std::cout << "test message to see if the file has been runed" << std::endl;
     auto argparser = ArgParse(argc, argv);
 
     // VDBVolume configuration
-    auto vdbfusion_cfg =
-        vdbfusion::VDBFusionConfig::LoadFromYAML(argparser.get<std::string>("--config"));
+    auto vdbfusion_cfg = 
+        vdbfusion::VDBFusionConfig::LoadFromYAML(argparser.get<std::string>("--config")); 
     // Dataset specific configuration
     auto kitti_cfg = datasets::KITTIConfig::LoadFromYAML(argparser.get<std::string>("--config"));
 
-    openvdb::initialize();
+    openvdb::initialize(); 
 
     // Kitti stuff
     auto n_scans = argparser.get<int>("--n_scans");
     auto kitti_root_dir = fs::path(argparser.get<std::string>("kitti_root_dir"));
-    auto sequence = argparser.get<std::string>("--sequence");
+    auto sequence = argparser.get<std::string>("--sequence"); 
 
-    // Initialize dataset
+    // Initialize dataset 
     const auto dataset =
         datasets::KITTIDataset(kitti_root_dir, sequence, n_scans, kitti_cfg.apply_pose_,
                                kitti_cfg.preprocess_, kitti_cfg.min_range_, kitti_cfg.max_range_);
@@ -102,11 +290,47 @@ int main(int argc, char* argv[]) {
     vdbfusion::VDBVolume tsdf_volume(vdbfusion_cfg.voxel_size_, vdbfusion_cfg.sdf_trunc_,
                                      vdbfusion_cfg.space_carving_);
     timers::FPSTimer<10> timer;
+    //modification---------------------------------------------------------------------------------------
+    int index = 0; 
+    //modification---------------------------------------------------------------------------------------
     for (const auto& [scan, semantics, origin] : iterable(dataset)) {
         timer.tic();
-        tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; });
+        tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; }); //<<------------------------------core  & origionis the camera pose 
+        //-----------------------------------------------------------------------------modification 
+        auto start0 = std::chrono::high_resolution_clock::now();
+        std::cout << " the origin is: " << origin << std::endl;
+        std::cout << "enter the loop run part! #" << index <<std::endl;
+        const int numIterations = 50;
+        const int width = 1024;
+        const int height = 1024;
+        BufferT   imageBuffer;
+        imageBuffer.init(width * height * sizeof(float));
+        auto end0 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed0 = end0 - start0;
+        std::cout << "create the image buffer took: " << elapsed0.count() << " ms" << std::endl; // 0.06 ms
+
+        auto start1 = std::chrono::high_resolution_clock::now();
+        openvdb::FloatGrid::Ptr openvdbGrid = tsdf_volume.tsdf_;
+        nanovdb::GridHandle<nanovdb::HostBuffer> handle = nanovdb::openToNanoVDB<nanovdb::HostBuffer>(*openvdbGrid);
+        auto end1 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed1 = end1 - start1;
+        std::cout << "Conversion to NanoVDB took: " << elapsed1.count() << " ms" << std::endl; //13 ms
+
+        auto start2 = std::chrono::high_resolution_clock::now();
+        runNanoVDB(handle, numIterations, width, height, imageBuffer,index, origin);
+        auto end2 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed2 = end2 - start2;
+        std::cout << "nano rendering took" << elapsed2.count() << " ms" << std::endl; // 4000 ms
+        index++;
+        //-----------------------------------------------------------------------------modification 
         timer.toc();
     }
+    // example/cpp/dataset/KITTIO... / last part helper function defined. 
+
+ 
+
+
+
 
     // Store the grid results to disks
     std::string map_name = fmt::format("{out_dir}/kitti_{seq}_{n_scans}_scans",
@@ -162,6 +386,8 @@ int main(int argc, char* argv[]) {
         }
         
     }
+
+
 
     return 0;
 }
