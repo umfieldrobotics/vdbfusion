@@ -1,3 +1,9 @@
+*.pfm
+jpg_folder/
+notebooks/
+.vscode/
+
+
 # Examples
 **/*data
 **/*results

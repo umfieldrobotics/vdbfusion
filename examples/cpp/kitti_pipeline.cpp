@@ -38,15 +38,13 @@
 #include "utils/Timers.h"
 // #include "nanovdb/examples/ex_raytrace_level_set/nanovdb.cu"
 #include <nanovdb/util/Ray.h> 
-#include "common.h"
+// #include "common.h"
 #include <nanovdb/util/HDDA.h>
 
 #include <nanovdb/util/IO.h>
 
 #include "open3d/Open3D.h"
 
-  // Now iterate through the map and save each mesh
-//-------modifiction 
 #include <nanovdb/util/IO.h>
 #include <nanovdb/util/Primitives.h>
 #include <nanovdb/util/CudaDeviceBuffer.h>
@@ -57,13 +55,98 @@
 #include <vector>
 #include <chrono>
 
-//------------------------------
-
+// ----- NANOVDB -----
 #if defined(NANOVDB_USE_CUDA)
 using BufferT = nanovdb::CudaDeviceBuffer;
 #else
 using BufferT = nanovdb::HostBuffer;
 #endif
+
+inline void saveImage(const std::string& filename, int width, int height, const float* image)
+{
+    const auto isLittleEndian = []() -> bool {
+        static int  x = 1;
+        static bool result = reinterpret_cast<uint8_t*>(&x)[0] == 1;
+        return result;
+    };
+
+    float scale = 1.0f;
+    if (isLittleEndian())
+        scale = -scale;
+
+    std::fstream fs(filename, std::ios::out | std::ios::binary);
+    if (!fs.is_open()) {
+        throw std::runtime_error("Unable to open file: " + filename);
+    }
+
+    fs << "Pf\n"
+       << width << "\n"
+       << height << "\n"
+       << scale << "\n";
+
+    for (int i = 0; i < width * height; ++i) {
+        float r = image[i];
+        fs.write((char*)&r, sizeof(float));
+    }
+}
+
+// template<typename Vec3T>
+// struct RayGenOp
+// {
+//     float mWBBoxDimZ;
+//     Vec3T mWBBoxCenter;
+
+//     inline RayGenOp(float wBBoxDimZ, Vec3T wBBoxCenter)
+//         : mWBBoxDimZ(wBBoxDimZ)
+//         , mWBBoxCenter(wBBoxCenter)
+//     {
+//     }
+
+//     inline __hostdev__ void operator()(int i, int w, int h, Vec3T& outOrigin, Vec3T& outDir) const
+//     {
+//         // perspective camera along Z-axis...
+//         uint32_t x, y;
+// #if 0
+//         mortonDecode(i, x, y);
+// #else
+//         x = i % w;
+//         y = i / w;
+// #endif
+//         const float fov = 45.f;
+//         const float u = (float(x) + 0.5f) / w;
+//         const float v = (float(y) + 0.5f) / h;
+//         const float aspect = w / float(h);
+//         const float Px = (2.f * u - 1.f) * tanf(fov / 2 * 3.14159265358979323846f / 180.f) * aspect;
+//         const float Py = (2.f * v - 1.f) * tanf(fov / 2 * 3.14159265358979323846f / 180.f);
+//         const Vec3T origin = mWBBoxCenter + Vec3T(0, 0, mWBBoxDimZ);
+//         Vec3T       dir(Px, Py, -1.f);
+//         dir.normalize();
+//         outOrigin = origin;
+//         outDir = dir;
+//     }
+// };
+
+// struct CompositeOp
+// {
+//     inline __hostdev__ void operator()(float* outImage, int i, int w, int h, float value, float alpha) const
+//     {
+//         uint32_t x, y;
+//         int      offset;
+// #if 0
+//         mortonDecode(i, x, y);
+//         offset = x + y * w;
+// #else
+//         x = i % w;
+//         y = i / w;
+//         offset = i;
+// #endif
+
+//         // checkerboard background...
+//         const int   mask = 1 << 7;
+//         const float bg = ((x & mask) ^ (y & mask)) ? 1.0f : 0.5f;
+//         outImage[offset] = alpha * value + (1.0f - alpha) * bg;
+//     }
+// };
 
 void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int width, int height, BufferT& imageBuffer, int index, const datasets::KITTIDataset::Point &origin)
 { 
@@ -86,17 +169,17 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
               << "[" << treeIndexBbox.min()[0] << "," << treeIndexBbox.min()[1] << "," << treeIndexBbox.min()[2] << "] -> ["
               << treeIndexBbox.max()[0] << "," << treeIndexBbox.max()[1] << "," << treeIndexBbox.max()[2] << "]" << std::endl;
 
-    RayGenOp<Vec3T> rayGenOp(wBBoxDimZ, wBBoxCenter);
-    CompositeOp     compositeOp;
+    // RayGenOp<Vec3T> rayGenOp(wBBoxDimZ, wBBoxCenter);
+    // CompositeOp     compositeOp;
 
-    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, &origin] __hostdev__(int start, int end, float* image, const GridT* grid) {
+    auto renderOp = [width, height, treeIndexBbox, wBBoxDimZ, &origin] __hostdev__(int start, int end, float* image, const GridT* grid) {
         // get an accessor.
         auto acc = grid->tree().getAccessor();
 
         for (int i = start; i < end; ++i) {
             Vec3T rayEye; 
             Vec3T rayDir;
-            rayGenOp(i, width, height, rayEye, rayDir);
+            // rayGenOp(i, width, height, rayEye, rayDir);
 
 
             //modification--------------------------------------------------------
@@ -121,24 +204,22 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
 
             // generate ray.
             RayT wRay(rayEye, rayDir);
-            
-             
-        
+
             // transform the ray to the grid's index-space.
             RayT iRay = wRay.worldToIndexF(*grid);
             // intersect...
             float  t0;
             CoordT ijk;
             float  v;
-            if (nanovdb::ZeroCrossing(iRay, acc, ijk, v, t0)) {
-                // write distance to surface. (we assume it is a uniform voxel)
-                float wT0 = t0 * float(grid->voxelSize()[0]);
-                compositeOp(image, i, width, height, wT0 / (wBBoxDimZ * 2), 1.0f);
-            } else {
-                // write background value.
-                compositeOp(image, i, width, height, 0.0f, 0.0f);
+            // if (nanovdb::ZeroCrossing(iRay, acc, ijk, v, t0)) {
+            //     // write distance to surface. (we assume it is a uniform voxel)
+            //     float wT0 = t0 * float(grid->voxelSize()[0]);
+            //     compositeOp(image, i, width, height, wT0 / (wBBoxDimZ * 2), 1.0f);
+            // } else {
+            //     // write background value.
+            //     compositeOp(image, i, width, height, 0.0f, 0.0f);
  
-            }
+            // }
         }
     };
 
@@ -154,10 +235,10 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
         // durationAvg /= numIterations;
         // std::cout << "Average Duration(NanoVDB-Host) = " << durationAvg << " ms" << std::endl;
 
-        // std::ostringstream filename;
-        // filename << "loop_output" << index << ".pfm";
+        std::ostringstream filename;
+        filename << "loop_output" << index << ".pfm";
 
-        // saveImage(filename.str(), width, height, (float*)imageBuffer.data());
+        saveImage(filename.str(), width, height, (float*)imageBuffer.data());
         auto end3 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
         std::cout << "save the image took: " << elapsed3.count() << " ms" << std::endl;
@@ -190,11 +271,8 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
 #endif
 }
 
-// // nanovdb.cu function--------------------------------------------------------------------------
 
-
-
-
+// ----- END NANOVDB -----
 
 
 
@@ -238,17 +316,6 @@ argparse::ArgumentParser ArgParse(int argc, char* argv[]) {
     return argparser;
 }
 }  // namespace
-
-
-
-
-
-
-
-
-
-
- 
 
 
 
@@ -327,7 +394,6 @@ int main(int argc, char* argv[]) {
     }
     // example/cpp/dataset/KITTIO... / last part helper function defined. 
 
- 
 
 
 
