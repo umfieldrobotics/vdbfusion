@@ -145,19 +145,19 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
     {   
 
         auto start3 = std::chrono::high_resolution_clock::now();
-        // float durationAvg = 0;
-        // for (int i = 0; i < numIterations; ++i) {
-        //     float duration = renderImage(false, renderOp, width, height, h_outImage, h_grid);
-        //     //std::cout << "Duration(NanoVDB-Host) = " << duration << " ms" << std::endl;
-        //     durationAvg += duration;
-        // }
-        // durationAvg /= numIterations;
-        // std::cout << "Average Duration(NanoVDB-Host) = " << durationAvg << " ms" << std::endl;
+        float durationAvg = 0;
+        for (int i = 0; i < numIterations; ++i) {
+            float duration = renderImage(false, renderOp, width, height, h_outImage, h_grid);
+            //std::cout << "Duration(NanoVDB-Host) = " << duration << " ms" << std::endl;
+            durationAvg += duration;
+        }
+        durationAvg /= numIterations;
+        std::cout << "Average Duration(NanoVDB-Host) = " << durationAvg << " ms" << std::endl;
 
-        // std::ostringstream filename;
-        // filename << "loop_output" << index << ".pfm";
+        std::ostringstream filename;
+        filename << "loop_output" << index << ".pfm";
 
-        // saveImage(filename.str(), width, height, (float*)imageBuffer.data());
+        saveImage(filename.str(), width, height, (float*)imageBuffer.data());
         auto end3 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
         std::cout << "save the image took: " << elapsed3.count() << " ms" << std::endl;
@@ -311,6 +311,42 @@ int main(int argc, char* argv[]) {
 
         auto start1 = std::chrono::high_resolution_clock::now();
         openvdb::FloatGrid::Ptr openvdbGrid = tsdf_volume.tsdf_;
+
+        openvdb::CoordBBox bbox;
+        if (openvdbGrid->tree().evalActiveVoxelBoundingBox(bbox)) {
+            // Print the dimensions of the bounding box
+            openvdb::Coord dim = bbox.dim();
+            std::cout << "Bounding box dimensions: " << dim.x() << " x " << dim.y() << " x " << dim.z() << std::endl;
+        } else {
+            std::cout << "No active voxels in the grid." << std::endl;
+        }
+
+
+        // // try to change some part to be 0 and see what will happen
+        // openvdb::FloatGrid::Accessor accessor = openvdbGrid->getAccessor();
+        // for(int x = 0; x < 100; x++){
+        //     for(int y = 0; y < 100; y++){
+        //         for (int z = 0; z < 100; z++){
+        //             openvdb::Coord xyz(x, y, z);  // x, y, and z are the indices of the voxel
+        //             float newValue = 0.0f;        // the new value you want to set
+        //             accessor.setValue(xyz, newValue); // set the new value at the voxel location
+        //         }
+        //     }
+        // }
+
+        // auto [vertices, triangles, labels] = // labels belong to triangles
+        //     tsdf_volume.ExtractTriangleMesh(vdbfusion_cfg.fill_holes_, vdbfusion_cfg.min_weight_);
+
+        // for(int i = 0; i < 100; i ++){
+        //     std::cout<< " the "  << i << " element is: " << labels[i] << std::endl;
+        // }
+ 
+        // std::cout<< " the size of the vector " << labels.size() << std::endl;
+
+
+        
+         
+
         nanovdb::GridHandle<nanovdb::HostBuffer> handle = nanovdb::openToNanoVDB<nanovdb::HostBuffer>(*openvdbGrid);
         auto end1 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed1 = end1 - start1;
@@ -330,7 +366,7 @@ int main(int argc, char* argv[]) {
  
 
 
-
+ 
 
     // Store the grid results to disks
     std::string map_name = fmt::format("{out_dir}/kitti_{seq}_{n_scans}_scans",
