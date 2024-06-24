@@ -322,26 +322,26 @@ int main(int argc, char* argv[]) {
         }
 
 
-        // try to change some part to be 0 and see what will happen
-        openvdb::FloatGrid::Accessor accessor = openvdbGrid->getAccessor();
-        for(int x = 0; x < 100; x++){
-            for(int y = 0; y < 100; y++){
-                for (int z = 0; z < 100; z++){
-                    openvdb::Coord xyz(x, y, z);  // x, y, and z are the indices of the voxel
-                    float newValue = 0.0f;        // the new value you want to set
-                    accessor.setValue(xyz, newValue); // set the new value at the voxel location
-                }
-            }
-        }
+        // // try to change some part to be 0 and see what will happen
+        // openvdb::FloatGrid::Accessor accessor = openvdbGrid->getAccessor();
+        // for(int x = 0; x < 100; x++){
+        //     for(int y = 0; y < 100; y++){
+        //         for (int z = 0; z < 100; z++){
+        //             openvdb::Coord xyz(x, y, z);  // x, y, and z are the indices of the voxel
+        //             float newValue = 0.0f;        // the new value you want to set
+        //             accessor.setValue(xyz, newValue); // set the new value at the voxel location
+        //         }
+        //     }
+        // }
 
-        auto [vertices, triangles, labels] = // labels belong to triangles
-            tsdf_volume.ExtractTriangleMesh(vdbfusion_cfg.fill_holes_, vdbfusion_cfg.min_weight_);
+        // auto [vertices, triangles, labels] = // labels belong to triangles
+        //     tsdf_volume.ExtractTriangleMesh(vdbfusion_cfg.fill_holes_, vdbfusion_cfg.min_weight_);
 
-        for(int i = 0; i < 100; i ++){
-            std::cout<< " the "  << i << " element is: " << labels[i] << std::endl;
-        }
+        // for(int i = 0; i < 100; i ++){
+        //     std::cout<< " the "  << i << " element is: " << labels[i] << std::endl;
+        // }
  
-        std::cout<< " the size of the vector " << labels.size() << std::endl;
+        // std::cout<< " the size of the vector " << labels.size() << std::endl;
 
 
         
