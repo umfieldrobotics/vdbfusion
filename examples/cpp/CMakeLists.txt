@@ -37,6 +37,13 @@ find_package(TBB REQUIRED)
 
 find_package(OpenCV REQUIRED)
 
+#modification-------------------------------------------------------------
+#include the nanovdb 
+# Include directories
+include_directories(${CMAKE_SOURCE_DIR})
+include_directories(/home/yuzhen/Desktop/semanticVDB/openvdb/nanovdb/nanovdb/examples/ex_raytrace_level_set)
+#modification-------------------------------------------------------------
+
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
