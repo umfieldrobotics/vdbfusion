@@ -30,34 +30,29 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
- 
 
 #include "datasets/KITTIOdometry.h"
 #include "utils/Config.h"
 #include "utils/Iterable.h"
 #include "utils/Timers.h"
-// #include "nanovdb/examples/ex_raytrace_level_set/nanovdb.cu"
-#include <nanovdb/util/Ray.h> 
+
 #include "common.h"
+#include <nanovdb/util/Ray.h> 
 #include <nanovdb/util/HDDA.h>
-
-#include <nanovdb/util/IO.h>
-
-#include "open3d/Open3D.h"
-
-  // Now iterate through the map and save each mesh
-//-------modifiction 
 #include <nanovdb/util/IO.h>
 #include <nanovdb/util/Primitives.h>
 #include <nanovdb/util/CudaDeviceBuffer.h>
 #include <nanovdb/NanoVDB.h>
 #include <nanovdb/util/OpenToNanoVDB.h>
 
+#include "open3d/Open3D.h"
+
 #include <sstream>
 #include <vector>
 #include <chrono>
 
-//------------------------------
+
+#define NANOVDB_USE_CUDA
 
 #if defined(NANOVDB_USE_CUDA)
 using BufferT = nanovdb::CudaDeviceBuffer;
@@ -90,6 +85,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
     CompositeOp     compositeOp;
 
     auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, &origin] __hostdev__(int start, int end, float* image, const GridT* grid) {
+        std::cout << "RENDERING" << std::endl;
         // get an accessor.
         auto acc = grid->tree().getAccessor();
 
@@ -98,9 +94,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
             Vec3T rayDir;
             rayGenOp(i, width, height, rayEye, rayDir);
 
-
-            //modification--------------------------------------------------------
-            //chang the ray direction from nagative z direction to the positive x direction 
+            // change the ray direction from nagative z direction to the positive x direction 
             double rotationMatrix[3][3] = {
                 {0, 0, 1},
                 {1, 0, 0},
@@ -117,12 +111,8 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
             rayEye[1] = origin(1); 
             rayEye[2] = origin(2); 
 
-            //modification--------------------------------------------------------
-
             // generate ray.
             RayT wRay(rayEye, rayDir);
-            
-             
         
             // transform the ray to the grid's index-space.
             RayT iRay = wRay.worldToIndexF(*grid);
@@ -142,29 +132,8 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
         }
     };
 
-    {   
-
-        auto start3 = std::chrono::high_resolution_clock::now();
-        float durationAvg = 0;
-        for (int i = 0; i < numIterations; ++i) {
-            float duration = renderImage(false, renderOp, width, height, h_outImage, h_grid);
-            //std::cout << "Duration(NanoVDB-Host) = " << duration << " ms" << std::endl;
-            durationAvg += duration;
-        }
-        durationAvg /= numIterations;
-        std::cout << "Average Duration(NanoVDB-Host) = " << durationAvg << " ms" << std::endl;
-
-        std::ostringstream filename;
-        filename << "loop_output" << index << ".pfm";
-
-        saveImage(filename.str(), width, height, (float*)imageBuffer.data());
-        auto end3 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
-        std::cout << "save the image took: " << elapsed3.count() << " ms" << std::endl;
-
-    }
-
 #if defined(NANOVDB_USE_CUDA)
+
     handle.deviceUpload();
 
     auto* d_grid = handle.deviceGrid<float>();
@@ -178,24 +147,46 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
         float durationAvg = 0;
         for (int i = 0; i < numIterations; ++i) {
             float duration = renderImage(true, renderOp, width, height, d_outImage, d_grid);
-            //std::cout << "Duration(NanoVDB-Cuda) = " << duration << " ms" << std::endl;
+            // std::cout << "Duration(NanoVDB-Cuda) = " << duration << " ms" << std::endl;
             durationAvg += duration;
         }
         durationAvg /= numIterations;
         std::cout << "Average Duration(NanoVDB-Cuda) = " << durationAvg << " ms" << std::endl;
 
         imageBuffer.deviceDownload();
-        saveImage("raytrace_level_set-nanovdb-cuda.pfm", width, height, (float*)imageBuffer.data());
+
+        auto start3 = std::chrono::high_resolution_clock::now();
+        std::ostringstream filename;
+        filename << "out/pfms/" << "loop_output" << index << ".pfm";
+
+        saveImage(filename.str(), width, height, (float*)imageBuffer.data());
+        auto end3 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
+        std::cout << "save the image took: " << elapsed3.count() << " ms" << std::endl;
+    }
+#else
+    {   
+        auto start3 = std::chrono::high_resolution_clock::now();
+        float durationAvg = 0;
+        for (int i = 0; i < numIterations; ++i) {
+            float duration = renderImage(false, renderOp, width, height, h_outImage, h_grid);
+            //std::cout << "Duration(NanoVDB-Host) = " << duration << " ms" << std::endl;
+            durationAvg += duration;
+        }
+        durationAvg /= numIterations;
+        std::cout << "Average Duration(NanoVDB-Host) = " << durationAvg << " ms" << std::endl;
+
+        std::ostringstream filename;
+        filename << "out/pfms/" << "loop_output" << index << ".pfm";
+
+        saveImage(filename.str(), width, height, (float*)imageBuffer.data());
+        auto end3 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
+        std::cout << "save the image took: " << elapsed3.count() << " ms" << std::endl;
+
     }
 #endif
 }
-
-// // nanovdb.cu function--------------------------------------------------------------------------
-
-
-
-
-
 
 
 // Namespace aliases
@@ -263,7 +254,8 @@ extern void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, 
 
 
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {    
+
 
     std::cout << "test message to see if the file has been runed" << std::endl;
     auto argparser = ArgParse(argc, argv);
@@ -290,83 +282,51 @@ int main(int argc, char* argv[]) {
     vdbfusion::VDBVolume tsdf_volume(vdbfusion_cfg.voxel_size_, vdbfusion_cfg.sdf_trunc_,
                                      vdbfusion_cfg.space_carving_);
     timers::FPSTimer<10> timer;
-    //modification---------------------------------------------------------------------------------------
+    //modification--------------------------------cuda-------------------------------------------------------
     int index = 0; 
     //modification---------------------------------------------------------------------------------------
     for (const auto& [scan, semantics, origin] : iterable(dataset)) {
         timer.tic();
-        tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; }); //<<------------------------------core  & origionis the camera pose 
-        //-----------------------------------------------------------------------------modification 
-        auto start0 = std::chrono::high_resolution_clock::now();
+        tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; });
+        timer.toc();
+
+        // Render 1382 x 512 image and save as pfm
         std::cout << " the origin is: " << origin << std::endl;
         std::cout << "enter the loop run part! #" << index <<std::endl;
         const int numIterations = 50;
-        const int width = 1024;
-        const int height = 1024;
+        const int width = 691;
+        const int height = 256;
+
+        auto timer_imgbuff0 = std::chrono::high_resolution_clock::now();
         BufferT   imageBuffer;
         imageBuffer.init(width * height * sizeof(float));
-        auto end0 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> elapsed0 = end0 - start0;
-        std::cout << "create the image buffer took: " << elapsed0.count() << " ms" << std::endl; // 0.06 ms
+        auto timer_imgbuff1 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed0 = timer_imgbuff1 - timer_imgbuff0;
+        std::cout << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
 
-        auto start1 = std::chrono::high_resolution_clock::now();
+        auto timer_nanovdbconv0 = std::chrono::high_resolution_clock::now();
         openvdb::FloatGrid::Ptr openvdbGrid = tsdf_volume.tsdf_;
-
         openvdb::CoordBBox bbox;
-        if (openvdbGrid->tree().evalActiveVoxelBoundingBox(bbox)) {
-            // Print the dimensions of the bounding box
-            openvdb::Coord dim = bbox.dim();
-            std::cout << "Bounding box dimensions: " << dim.x() << " x " << dim.y() << " x " << dim.z() << std::endl;
-        } else {
-            std::cout << "No active voxels in the grid." << std::endl;
-        }
-
-
-        // // try to change some part to be 0 and see what will happen
-        // openvdb::FloatGrid::Accessor accessor = openvdbGrid->getAccessor();
-        // for(int x = 0; x < 100; x++){
-        //     for(int y = 0; y < 100; y++){
-        //         for (int z = 0; z < 100; z++){
-        //             openvdb::Coord xyz(x, y, z);  // x, y, and z are the indices of the voxel
-        //             float newValue = 0.0f;        // the new value you want to set
-        //             accessor.setValue(xyz, newValue); // set the new value at the voxel location
-        //         }
-        //     }
+        // if (openvdbGrid->tree().evalActiveVoxelBoundingBox(bbox)) {
+        //     // Print the dimensions of the bounding box
+        //     openvdb::Coord dim = bbox.dim();
+        //     std::cout << "Bounding box dimensions: " << dim.x() << " x " << dim.y() << " x " << dim.z() << std::endl;
+        // } else {
+        //     std::cout << "No active voxels in the grid." << std::endl;
         // }
-
-        // auto [vertices, triangles, labels] = // labels belong to triangles
-        //     tsdf_volume.ExtractTriangleMesh(vdbfusion_cfg.fill_holes_, vdbfusion_cfg.min_weight_);
-
-        // for(int i = 0; i < 100; i ++){
-        //     std::cout<< " the "  << i << " element is: " << labels[i] << std::endl;
-        // }
- 
-        // std::cout<< " the size of the vector " << labels.size() << std::endl;
-
-
-        
-         
-
-        nanovdb::GridHandle<nanovdb::HostBuffer> handle = nanovdb::openToNanoVDB<nanovdb::HostBuffer>(*openvdbGrid);
-        auto end1 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> elapsed1 = end1 - start1;
-        std::cout << "Conversion to NanoVDB took: " << elapsed1.count() << " ms" << std::endl; //13 ms
-
-        auto start2 = std::chrono::high_resolution_clock::now();
+        nanovdb::GridHandle<BufferT> handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGrid);
+        auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
+        std::cout << "Conversion to NanoVDB took: " << elapsed1.count() << " ms" << std::endl;
+        std::cout << typeid(BufferT).name() << std::endl;
+        auto timer_render0 = std::chrono::high_resolution_clock::now();
         runNanoVDB(handle, numIterations, width, height, imageBuffer,index, origin);
-        auto end2 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> elapsed2 = end2 - start2;
+        auto timer_render1 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed2 = timer_render1 - timer_render0;
         std::cout << "nano rendering took" << elapsed2.count() << " ms" << std::endl; // 4000 ms
         index++;
-        //-----------------------------------------------------------------------------modification 
-        timer.toc();
     }
-    // example/cpp/dataset/KITTIO... / last part helper function defined. 
 
- 
-
-
- 
 
     // Store the grid results to disks
     std::string map_name = fmt::format("{out_dir}/kitti_{seq}_{n_scans}_scans",
