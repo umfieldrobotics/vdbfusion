@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
 project(VDBFusion VERSION 0.1.6 LANGUAGES CXX)
 
 set(CMAKE_CXX_FLAGS "-g") 
@@ -50,6 +50,10 @@ if(USE_CCACHE)
     message(STATUS "Using ccache: ${CCACHE_PATH}")
   endif()
 endif()
+
+set(CMAKE_CUDA_STANDARD 11)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+enable_language(CUDA)
 
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
