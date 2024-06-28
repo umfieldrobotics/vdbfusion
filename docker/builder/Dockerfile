@@ -33,11 +33,22 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     build-essential \
     ccache \
     clang-format \
-    cmake \
     git \
     sudo \
+    wget \
+    tar \
     vim \
+    libtiff-dev \
+    libfontconfig1-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install cmake
+RUN mkdir ~/temp
+RUN cd ~/temp
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.28.6/cmake-3.28.6-linux-x86_64.tar.gz
+RUN tar xvzf cmake-3.28.6-linux-x86_64.tar.gz --strip-components=1 -C /usr/local
+RUN cd ..
+RUN rm -rf temp
 
 # Install Python apt dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
@@ -85,7 +96,7 @@ RUN mkdir build && \
       -D INSTALL_PYTHON_EXAMPLES=OFF \
       -D INSTALL_C_EXAMPLES=OFF \
       -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
-      -D WITH_FREETYPE=ON \
+      -D WITH_FREETYPE=OFF \
       ../opencv && \
     make -j6 && \
     make install
@@ -96,5 +107,6 @@ ENV TERM xterm-256color
 CMD ["bash", "-l"]
 
 USER docker
+RUN export PATH="/usr/local/cuda/bin:PATH"
 CMD /bin/bash
 
