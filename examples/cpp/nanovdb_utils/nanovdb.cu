@@ -18,7 +18,7 @@ using BufferT = nanovdb::CudaDeviceBuffer;
 using BufferT = nanovdb::HostBuffer;
 #endif
 
-void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int width, int height, BufferT& imageBuffer, int index, const std::vector<double>& origin)
+void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin)
 { 
     using GridT = nanovdb::FloatGrid;
     using CoordT = nanovdb::Coord;
@@ -42,8 +42,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
     RayGenOp<Vec3T> rayGenOp(wBBoxDimZ, wBBoxCenter);
     CompositeOp     compositeOp;
 
-    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, &origin] __hostdev__(int start, int end, float* image, const GridT* grid) {
-        std::cout << "RENDERING" << std::endl;
+    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, origin] __hostdev__(int start, int end, float* image, const GridT* grid) {
         // get an accessor.
         auto acc = grid->tree().getAccessor();
 

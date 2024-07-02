@@ -34,7 +34,7 @@
 
 #include <opencv2/opencv.hpp>
 
-#include "torch/torch.h"
+// #include "torch/torch.h"
 
 #include "open3d/Open3D.h"
 

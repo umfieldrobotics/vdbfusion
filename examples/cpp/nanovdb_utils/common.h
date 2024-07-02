@@ -20,7 +20,15 @@ using BufferT = nanovdb::CudaDeviceBuffer;
 using BufferT = nanovdb::HostBuffer;
 #endif
 
-extern void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int width, int height, BufferT& imageBuffer, int index, const std::vector<double>& origin);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin);
+
+#ifdef __cplusplus
+}
+#endif
 
 inline __hostdev__ uint32_t CompactBy1(uint32_t x)
 {

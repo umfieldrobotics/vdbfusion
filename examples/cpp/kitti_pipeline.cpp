@@ -36,7 +36,7 @@
 #include "utils/Iterable.h"
 #include "utils/Timers.h"
 
-#include "common.h"
+#include "nanovdb_utils/common.h"
 #include <nanovdb/util/Ray.h> 
 #include <nanovdb/util/HDDA.h>
 #include <nanovdb/util/IO.h>
@@ -59,8 +59,6 @@ using BufferT = nanovdb::CudaDeviceBuffer;
 #else
 using BufferT = nanovdb::HostBuffer;
 #endif
-
-
 
 
 // Namespace aliases

@@ -51,7 +51,11 @@ if(USE_CCACHE)
   endif()
 endif()
 
-set(CMAKE_CUDA_STANDARD 11)
+set(CUDA_HOME /usr/local/cuda)
+set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
+set(CUDACXX /usr/local/cuda/bin/nvcc)
+set(CMAKE_CUDA_ARCHITECTURES native)
+set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 enable_language(CUDA)
 
