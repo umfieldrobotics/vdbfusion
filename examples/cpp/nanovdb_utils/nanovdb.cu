@@ -90,7 +90,6 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
     };
 
 #if defined(NANOVDB_USE_CUDA)
-
     handle.deviceUpload();
 
     auto* d_grid = handle.deviceGrid<float>();
@@ -104,7 +103,6 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
         float durationAvg = 0;
         for (int i = 0; i < numIterations; ++i) {
             float duration = renderImage(true, renderOp, width, height, d_outImage, d_grid);
-            // std::cout << "Duration(NanoVDB-Cuda) = " << duration << " ms" << std::endl;
             durationAvg += duration;
         }
         durationAvg /= numIterations;
@@ -119,7 +117,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
         saveImage(filename.str(), width, height, (float*)imageBuffer.data());
         auto end3 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
-        std::cout << "save the image took: " << elapsed3.count() << " ms" << std::endl;
+        std::cout << "Saving the image took: " << elapsed3.count() << " ms" << std::endl;
     }
 #else
     {   
@@ -127,7 +125,6 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
         float durationAvg = 0;
         for (int i = 0; i < numIterations; ++i) {
             float duration = renderImage(false, renderOp, width, height, h_outImage, h_grid);
-            //std::cout << "Duration(NanoVDB-Host) = " << duration << " ms" << std::endl;
             durationAvg += duration;
         }
         durationAvg /= numIterations;
@@ -139,7 +136,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
         saveImage(filename.str(), width, height, (float*)imageBuffer.data());
         auto end3 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
-        std::cout << "save the image took: " << elapsed3.count() << " ms" << std::endl;
+        std::cout << "Saving the image took: " << elapsed3.count() << " ms" << std::endl;
 
     }
 #endif

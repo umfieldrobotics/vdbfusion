@@ -137,15 +137,14 @@ int main(int argc, char* argv[]) {
         tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; });
         timer.toc();
 
-        // Render 1382 x 512 image and save as pfm
-        std::cout << " the origin is: " << origin << std::endl;
-        std::cout << "enter the loop run part! #" << index <<std::endl;
-        const int numIterations = 50;
+        // Render image and save as pfm
+        std::cout << "\nFrame #" << index << std::endl;
+        const int numIterations = 50; //  what does this do?
         const int width = 691;
         const int height = 256;
 
         auto timer_imgbuff0 = std::chrono::high_resolution_clock::now();
-        BufferT   imageBuffer;
+        BufferT imageBuffer;
         imageBuffer.init(width * height * sizeof(float));
         auto timer_imgbuff1 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed0 = timer_imgbuff1 - timer_imgbuff0;
@@ -162,16 +161,20 @@ int main(int argc, char* argv[]) {
         //     std::cout << "No active voxels in the grid." << std::endl;
         // }
         nanovdb::GridHandle<BufferT> handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGrid);
+
         auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
         std::cout << "Conversion to NanoVDB took: " << elapsed1.count() << " ms" << std::endl;
-        std::cout << typeid(BufferT).name() << std::endl;
+
         auto timer_render0 = std::chrono::high_resolution_clock::now();
+
         std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
         runNanoVDB(handle, numIterations, width, height, imageBuffer, index, origin_vec);
+
         auto timer_render1 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed2 = timer_render1 - timer_render0;
-        std::cout << "nano rendering took" << elapsed2.count() << " ms" << std::endl; // 4000 ms
+        std::cout << "NanoVDB rendering took: " << elapsed2.count() << " ms" << std::endl;
+
         index++;
     }
 
