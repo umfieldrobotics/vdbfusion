@@ -2,6 +2,10 @@
 **/*data
 **/*results
 **/*cache
+.vscode/
+examples/cpp/out/
+**/dataset/
+examples/notebooks/semantic-kitti-odometry/
 
 # 3D Artifacts
 **/*.png

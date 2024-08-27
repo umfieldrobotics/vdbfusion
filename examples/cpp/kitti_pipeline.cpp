@@ -36,7 +36,30 @@
 #include "utils/Iterable.h"
 #include "utils/Timers.h"
 
+#include "nanovdb_utils/common.h"
+#include <nanovdb/util/Ray.h> 
+#include <nanovdb/util/HDDA.h>
+#include <nanovdb/util/IO.h>
+#include <nanovdb/util/Primitives.h>
+#include <nanovdb/util/CudaDeviceBuffer.h>
+#include <nanovdb/NanoVDB.h>
+#include <nanovdb/util/OpenToNanoVDB.h>
+
 #include "open3d/Open3D.h"
+
+#include <sstream>
+#include <vector>
+#include <chrono>
+
+
+// #define NANOVDB_USE_CUDA
+
+#if defined(NANOVDB_USE_CUDA)
+using BufferT = nanovdb::CudaDeviceBuffer;
+#else
+using BufferT = nanovdb::HostBuffer;
+#endif
+
 
 // Namespace aliases
 using namespace fmt::literals;
@@ -68,32 +91,36 @@ argparse::ArgumentParser ArgParse(int argc, char* argv[]) {
         exit(0);
     }
 
-    auto kitti_root_dir = argparser.get<std::string>("kitti_root_dir");
+    auto kitti_root_dir = argparser.get<std::string>("kitti_root_dir"); 
     if (!fs::exists(kitti_root_dir)) {
         std::cerr << kitti_root_dir << "path doesn't exists" << std::endl;
         exit(1);
     }
+    
+    std::cout<< " the direction: " << kitti_root_dir << std::endl;
     return argparser;
 }
 }  // namespace
 
-int main(int argc, char* argv[]) {
+
+int main(int argc, char* argv[]) {    
+
     auto argparser = ArgParse(argc, argv);
 
     // VDBVolume configuration
-    auto vdbfusion_cfg =
-        vdbfusion::VDBFusionConfig::LoadFromYAML(argparser.get<std::string>("--config"));
+    auto vdbfusion_cfg = 
+        vdbfusion::VDBFusionConfig::LoadFromYAML(argparser.get<std::string>("--config")); 
     // Dataset specific configuration
     auto kitti_cfg = datasets::KITTIConfig::LoadFromYAML(argparser.get<std::string>("--config"));
 
-    openvdb::initialize();
+    openvdb::initialize(); 
 
     // Kitti stuff
     auto n_scans = argparser.get<int>("--n_scans");
     auto kitti_root_dir = fs::path(argparser.get<std::string>("kitti_root_dir"));
-    auto sequence = argparser.get<std::string>("--sequence");
+    auto sequence = argparser.get<std::string>("--sequence"); 
 
-    // Initialize dataset
+    // Initialize dataset 
     const auto dataset =
         datasets::KITTIDataset(kitti_root_dir, sequence, n_scans, kitti_cfg.apply_pose_,
                                kitti_cfg.preprocess_, kitti_cfg.min_range_, kitti_cfg.max_range_);
@@ -102,11 +129,55 @@ int main(int argc, char* argv[]) {
     vdbfusion::VDBVolume tsdf_volume(vdbfusion_cfg.voxel_size_, vdbfusion_cfg.sdf_trunc_,
                                      vdbfusion_cfg.space_carving_);
     timers::FPSTimer<10> timer;
+    //modification--------------------------------cuda-------------------------------------------------------
+    int index = 0; 
+    //modification---------------------------------------------------------------------------------------
     for (const auto& [scan, semantics, origin] : iterable(dataset)) {
         timer.tic();
         tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; });
         timer.toc();
+
+        // Render image and save as pfm
+        std::cout << "\nFrame #" << index << std::endl;
+        const int numIterations = 50; //  what does this do?
+        const int width = 691;
+        const int height = 256;
+
+        auto timer_imgbuff0 = std::chrono::high_resolution_clock::now();
+        BufferT imageBuffer;
+        imageBuffer.init(width * height * sizeof(float));
+        auto timer_imgbuff1 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed0 = timer_imgbuff1 - timer_imgbuff0;
+        std::cout << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
+
+        auto timer_nanovdbconv0 = std::chrono::high_resolution_clock::now();
+        openvdb::FloatGrid::Ptr openvdbGrid = tsdf_volume.tsdf_;
+        openvdb::CoordBBox bbox;
+        // if (openvdbGrid->tree().evalActiveVoxelBoundingBox(bbox)) {
+        //     // Print the dimensions of the bounding box
+        //     openvdb::Coord dim = bbox.dim();
+        //     std::cout << "Bounding box dimensions: " << dim.x() << " x " << dim.y() << " x " << dim.z() << std::endl;
+        // } else {
+        //     std::cout << "No active voxels in the grid." << std::endl;
+        // }
+        nanovdb::GridHandle<BufferT> handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGrid);
+
+        auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
+        std::cout << "Conversion to NanoVDB took: " << elapsed1.count() << " ms" << std::endl;
+
+        auto timer_render0 = std::chrono::high_resolution_clock::now();
+
+        std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
+        runNanoVDB(handle, numIterations, width, height, imageBuffer, index, origin_vec);
+
+        auto timer_render1 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed2 = timer_render1 - timer_render0;
+        std::cout << "NanoVDB rendering took: " << elapsed2.count() << " ms" << std::endl;
+
+        index++;
     }
+
 
     // Store the grid results to disks
     std::string map_name = fmt::format("{out_dir}/kitti_{seq}_{n_scans}_scans",
@@ -162,6 +233,8 @@ int main(int argc, char* argv[]) {
         }
         
     }
+
+
 
     return 0;
 }
