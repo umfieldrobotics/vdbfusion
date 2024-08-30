@@ -95,14 +95,18 @@ inline void saveImage(const std::string& filename, int width, int height, const 
         throw std::runtime_error("Unable to open file: " + filename);
     }
 
-    fs << "Pf\n"
+    fs << "PF\n"
        << width << "\n"
        << height << "\n"
        << scale << "\n";
 
     for (int i = 0; i < width * height; ++i) {
-        float r = image[i];
-        fs.write((char*)&r, sizeof(float));
+        float r1 = image[i];
+        float r2 = image[width*height + i];
+        float r3 = image[2*width*height + i];
+        fs.write((char*)&r1, sizeof(float));
+        fs.write((char*)&r2, sizeof(float));
+        fs.write((char*)&r3, sizeof(float));
     }
 }
 
@@ -161,5 +165,7 @@ struct CompositeOp
         const int   mask = 1 << 7;
         const float bg = ((x & mask) ^ (y & mask)) ? 1.0f : 0.5f;
         outImage[offset] = alpha * value + (1.0f - alpha) * bg;
+        outImage[w*h + offset] = 0;
+        outImage[2*w*h + offset] = 0;
     }
 };

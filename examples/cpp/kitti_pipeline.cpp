@@ -145,7 +145,7 @@ int main(int argc, char* argv[]) {
 
         auto timer_imgbuff0 = std::chrono::high_resolution_clock::now();
         BufferT imageBuffer;
-        imageBuffer.init(width * height * sizeof(float));
+        imageBuffer.init(3 * width * height * sizeof(float)); // needs to be a 3 channel image
         auto timer_imgbuff1 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed0 = timer_imgbuff1 - timer_imgbuff0;
         std::cout << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
