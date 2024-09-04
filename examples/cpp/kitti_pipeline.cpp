@@ -152,6 +152,7 @@ int main(int argc, char* argv[]) {
 
         auto timer_nanovdbconv0 = std::chrono::high_resolution_clock::now();
         openvdb::FloatGrid::Ptr openvdbGrid = tsdf_volume.tsdf_;
+        openvdb::UInt32Grid::Ptr openvdbGridLabels = tsdf_volume.instances_;
         openvdb::CoordBBox bbox;
         // if (openvdbGrid->tree().evalActiveVoxelBoundingBox(bbox)) {
         //     // Print the dimensions of the bounding box
@@ -161,6 +162,7 @@ int main(int argc, char* argv[]) {
         //     std::cout << "No active voxels in the grid." << std::endl;
         // }
         nanovdb::GridHandle<BufferT> handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGrid);
+        nanovdb::GridHandle<BufferT> label_handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGridLabels);
 
         auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
@@ -169,7 +171,7 @@ int main(int argc, char* argv[]) {
         auto timer_render0 = std::chrono::high_resolution_clock::now();
 
         std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
-        runNanoVDB(handle, numIterations, width, height, imageBuffer, index, origin_vec);
+        runNanoVDB(handle, label_handle, numIterations, width, height, imageBuffer, index, origin_vec);
 
         auto timer_render1 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed2 = timer_render1 - timer_render0;

@@ -71,10 +71,10 @@ VDBVolume::VDBVolume(float voxel_size, float sdf_trunc, bool space_carving /* = 
     weights_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
     weights_->setGridClass(openvdb::GRID_UNKNOWN);
 
-    semantics_ = openvdb::Vec28IGrid::create(openvdb::Vec28i());
-    semantics_->setName("A(x): semantics grid");
-    semantics_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
-    semantics_->setGridClass(openvdb::GRID_UNKNOWN);
+    instances_ = openvdb::UInt32Grid::create();
+    instances_->setName("A(x): semantics grid");
+    instances_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
+    instances_->setGridClass(openvdb::GRID_UNKNOWN);
 }
 
 void VDBVolume::UpdateTSDF(const float& sdf,
@@ -105,7 +105,7 @@ void VDBVolume::Integrate(openvdb::FloatGrid::Ptr grid,
 }
 
 void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
-                          const std::vector<int>& labels,
+                          const std::vector<uint32_t>& labels,
                           const Eigen::Vector3d& origin,
                           const std::function<float(float)>& weighting_function) {
     if (points.empty()) {
@@ -125,7 +125,7 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
     // Get the "unsafe" version of the grid acessors
     auto tsdf_acc = tsdf_->getUnsafeAccessor();
     auto weights_acc = weights_->getUnsafeAccessor();
-    auto labels_acc = semantics_->getUnsafeAccessor();
+    auto labels_acc = instances_->getUnsafeAccessor();
 
     // Launch an for_each execution, use std::execution::par to parallelize this region
     std::for_each(points.cbegin(), points.cend(), [&](const auto& point) {
@@ -156,9 +156,10 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
                 const float new_tsdf = (last_tsdf * last_weight + tsdf * weight) / (new_weight);
                 tsdf_acc.setValue(voxel, new_tsdf);
                 weights_acc.setValue(voxel, new_weight);
-                openvdb::Vec28i label_one_hot = labels_acc.getValue(voxel);
-                label_one_hot[labels[idx]]++; // increase index for most recent label
-                labels_acc.setValue(voxel, label_one_hot);
+                labels_acc.setValue(voxel, labels[idx]); // overwrites previous data points for this voxel but since it's a ground truth label it should be consistent
+                // openvdb::Vec28i label_one_hot = labels_acc.getValue(voxel);
+                // label_one_hot[labels[idx]]++; // increase index for most recent label
+                // labels_acc.setValue(voxel, label_one_hot);
             }
         } while (dda.step());
     });

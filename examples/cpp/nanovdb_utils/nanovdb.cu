@@ -18,17 +18,21 @@ using BufferT = nanovdb::CudaDeviceBuffer;
 using BufferT = nanovdb::HostBuffer;
 #endif
 
-void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin)
+void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<BufferT>& label_handle, int numIterations, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin)
 { 
     using GridT = nanovdb::FloatGrid;
+    using LabelGridT = nanovdb::UInt32Grid;
     using CoordT = nanovdb::Coord;
     using RealT = float;
     using Vec3T = nanovdb::Vec3<RealT>;
     using RayT = nanovdb::Ray<RealT>;
 
     auto* h_grid = handle.grid<float>();
+    auto* h_label_grid = label_handle.grid<uint32_t>();
     if (!h_grid)
         throw std::runtime_error("GridHandle does not contain a valid host grid");
+    if (!h_label_grid)
+        throw std::runtime_error("GridHandle does not contain a valid host label grid");
 
     float* h_outImage = reinterpret_cast<float*>(imageBuffer.data());
 
@@ -42,9 +46,10 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
     RayGenOp<Vec3T> rayGenOp(wBBoxDimZ, wBBoxCenter);
     CompositeOp     compositeOp;
 
-    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, origin] __hostdev__(int start, int end, float* image, const GridT* grid) {
+    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, origin] __hostdev__(int start, int end, float* image, const GridT* grid, const LabelGridT* label_grid) {
         // get an accessor.
         auto acc = grid->tree().getAccessor();
+        auto label_acc = label_grid->tree().getAccessor();
 
         for (int i = start; i < end; ++i) {
             Vec3T rayEye; 
@@ -53,8 +58,8 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
 
             // change the ray direction from nagative z direction to the positive x direction 
             double rotationMatrix[3][3] = {
-                {0, 0, 1},
-                {1, 0, 0},
+                {0, 0, -1},
+                {-1, 0, 0},
                 {0, 1, 0}
             };
             double x = rayDir[0];
@@ -77,13 +82,16 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
             float  t0;
             CoordT ijk;
             float  v;
+            // if (label_acc.getValue(ijk) > 0)
+            //     printf("print: %u\n", label_acc.getValue(ijk));
             if (nanovdb::ZeroCrossing(iRay, acc, ijk, v, t0)) {
                 // write distance to surface. (we assume it is a uniform voxel)
                 float wT0 = t0 * float(grid->voxelSize()[0]);
-                compositeOp(image, i, width, height, wT0 / (wBBoxDimZ * 2), 1.0f);
+                auto label = label_acc.getValue(ijk);
+                compositeOp(image, i, width, height, label, 1.0f);
             } else {
                 // write background value.
-                compositeOp(image, i, width, height, 0.0f, 0.0f);
+                compositeOp(image, i, width, height, 0, 0.0f);
  
             }
         }
@@ -124,7 +132,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, int numIterations, int wid
         auto start3 = std::chrono::high_resolution_clock::now();
         float durationAvg = 0;
         for (int i = 0; i < numIterations; ++i) {
-            float duration = renderImage(false, renderOp, width, height, h_outImage, h_grid);
+            float duration = renderImage(false, renderOp, width, height, h_outImage, h_grid, h_label_grid);
             durationAvg += duration;
         }
         durationAvg /= numIterations;

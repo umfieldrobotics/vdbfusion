@@ -41,7 +41,7 @@ public:
     /// @brief Integrates a new (globally aligned) PointCloud and its labels into the current
     /// tsdf_ volume.
     void Integrate(const std::vector<Eigen::Vector3d>& points,
-                   const std::vector<int>& labels,
+                   const std::vector<uint32_t>& labels,
                    const Eigen::Vector3d& origin,
                    const std::function<float(float)>& weighting_function);
     /// @brief Integrates a new (globally aligned) PointCloud into the current
@@ -79,7 +79,7 @@ public:
     /// OpenVDB Grids modeling the signed distance field and the weight grid
     openvdb::FloatGrid::Ptr tsdf_;
     openvdb::FloatGrid::Ptr weights_;
-    openvdb::Vec28IGrid::Ptr semantics_;
+    openvdb::UInt32Grid::Ptr instances_;
 
     /// VDBVolume public properties
     float voxel_size_;

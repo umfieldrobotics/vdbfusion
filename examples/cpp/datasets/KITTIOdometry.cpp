@@ -216,16 +216,26 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<int>> ReadKITTIDepthAndLabe
     return std::make_tuple(points, labels);
 }
 
-std::vector<int> ReadKITTIGroundTruthLabels(const std::string& path) {
+std::vector<uint32_t> ReadKITTIGroundTruthLabels(const std::string& path) {
     // Load semantics info from text file
     std::ifstream infile(path.c_str()); // Open the input file
     assert(infile.is_open() && "ReadKITTISemantics| not able to open file");
 
-    std::vector<int> labels; // Vector to store uint16_t numbers
+    std::vector<uint32_t> labels; // Vector to store uint32_t numbers
     std::string line;
 
     while (std::getline(infile,line)) {
-        labels.push_back(std::stoi(line)); // Add it to the vector
+        std::stringstream ss(line);
+        std::vector<uint32_t> v;
+
+        std::string word;
+        while(ss >> word){ // read in format "inst_label semantic_label" from text file
+            v.push_back(std::stoul(word));
+        }
+
+        uint32_t label = (static_cast<uint32_t>(v[0]) << 16) | v[1]; // encode instance label in upper 16 bits and semantic label in lower 16 bits
+
+        labels.push_back(label); // push back instance and semantic label in one uint32_t
     }
 
     infile.close(); // Close the file
@@ -332,10 +342,10 @@ KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
     // label_files_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "image_2_labels/"), n_scans);
 }
 
-std::tuple<std::vector<Eigen::Vector3d>, std::vector<int>, Eigen::Vector3d> KITTIDataset::operator[](int idx) const {
+std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Vector3d> KITTIDataset::operator[](int idx) const {
     std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
     // auto [points, semantics] = ReadKITTIDepthAndLabels(depth_files_[idx], label_files_[idx], "/home/anjashep-frog-lab/Research/vdbfusion_mapping/vdbfusion/examples/notebooks/semantic-kitti-odometry/dataset/sequences/00/calib.txt");
-    std::vector<int> semantics = ReadKITTIGroundTruthLabels(gt_label_files_[idx]);
+    std::vector<uint32_t> semantics = ReadKITTIGroundTruthLabels(gt_label_files_[idx]);
 
     // if (preprocess_) PreProcessCloud(points, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
     if (apply_pose_) TransformPoints(points, poses_[idx]);

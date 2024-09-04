@@ -1,6 +1,6 @@
 import cv2
 # Read the PFM file
-for i in range(10):
+for i in range(99):
     image = cv2.imread(f'out/pfms/loop_output{i}.pfm', cv2.IMREAD_UNCHANGED)
     # # Display the image
     # cv2.imshow('PFM Image', image)
