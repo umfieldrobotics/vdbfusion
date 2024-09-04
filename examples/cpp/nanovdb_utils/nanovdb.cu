@@ -69,9 +69,9 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
             rayDir[1] = rotationMatrix[1][0] * x + rotationMatrix[1][1] * y + rotationMatrix[1][2] * z;
             rayDir[2] = rotationMatrix[2][0] * x + rotationMatrix[2][1] * y + rotationMatrix[2][2] * z;
  
-            rayEye[0] = origin[0]; 
-            rayEye[1] = origin[1]; 
-            rayEye[2] = origin[2]; 
+            rayEye[0] = origin[0];
+            rayEye[1] = origin[1];
+            rayEye[2] = origin[2];
 
             // generate ray.
             RayT wRay(rayEye, rayDir);
@@ -82,8 +82,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
             float  t0;
             CoordT ijk;
             float  v;
-            // if (label_acc.getValue(ijk) > 0)
-            //     printf("print: %u\n", label_acc.getValue(ijk));
+
             if (nanovdb::ZeroCrossing(iRay, acc, ijk, v, t0)) {
                 // write distance to surface. (we assume it is a uniform voxel)
                 float wT0 = t0 * float(grid->voxelSize()[0]);
@@ -99,10 +98,14 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
 
 #if defined(NANOVDB_USE_CUDA)
     handle.deviceUpload();
+    label_handle.deviceUpload();
 
     auto* d_grid = handle.deviceGrid<float>();
+    auto* d_label_grid = label_handle.deviceGrid<uint32_t>();
     if (!d_grid)
         throw std::runtime_error("GridHandle does not contain a valid device grid");
+    if (!d_label_grid)
+    throw std::runtime_error("GridHandle does not contain a valid device label grid");
 
     imageBuffer.deviceUpload();
     float* d_outImage = reinterpret_cast<float*>(imageBuffer.deviceData());
@@ -110,7 +113,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
     {
         float durationAvg = 0;
         for (int i = 0; i < numIterations; ++i) {
-            float duration = renderImage(true, renderOp, width, height, d_outImage, d_grid);
+            float duration = renderImage(true, renderOp, width, height, d_outImage, d_grid, d_label_grid);
             durationAvg += duration;
         }
         durationAvg /= numIterations;

@@ -243,13 +243,26 @@ std::vector<uint32_t> ReadKITTIGroundTruthLabels(const std::string& path) {
     return labels;
 }
 
-void PreProcessCloud(std::vector<Eigen::Vector3d>& points, float min_range, float max_range) {
-    points.erase(
-        std::remove_if(points.begin(), points.end(), [&](auto p) { return p.norm() > max_range; }),
-        points.end());
-    points.erase(
-        std::remove_if(points.begin(), points.end(), [&](auto p) { return p.norm() < min_range; }),
-        points.end());
+void PreProcessCloud(std::vector<Eigen::Vector3d>& points, std::vector<uint32_t>& labels, float min_range, float max_range) {
+    bool invert = true;
+    std::vector<bool> mask = std::vector<bool>(points.size(), invert);
+    size_t pos = 0;
+    for (auto & point : points) {
+        if (point.norm() > max_range || point.norm() < min_range) {
+            mask.at(pos) = false;
+        }
+        ++pos;
+    }
+    size_t counter = 0;
+    for (size_t i = 0; i < points.size(); i++) {
+        if (mask[i]) {
+            points.at(counter) = points.at(i);
+            labels.at(counter) = labels.at(i);
+            ++counter;
+        }
+    }
+    points.resize(counter);
+    labels.resize(counter);
 }
 
 void TransformPoints(std::vector<Eigen::Vector3d>& points, const Eigen::Matrix4d& transformation) {
@@ -347,7 +360,7 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Vector3d>
     // auto [points, semantics] = ReadKITTIDepthAndLabels(depth_files_[idx], label_files_[idx], "/home/anjashep-frog-lab/Research/vdbfusion_mapping/vdbfusion/examples/notebooks/semantic-kitti-odometry/dataset/sequences/00/calib.txt");
     std::vector<uint32_t> semantics = ReadKITTIGroundTruthLabels(gt_label_files_[idx]);
 
-    // if (preprocess_) PreProcessCloud(points, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
+    if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
     if (apply_pose_) TransformPoints(points, poses_[idx]);
     const Eigen::Vector3d origin = poses_[idx].block<3, 1>(0, 3);
     return std::make_tuple(points, semantics, origin);
