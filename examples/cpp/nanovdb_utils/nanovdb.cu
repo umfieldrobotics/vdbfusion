@@ -27,6 +27,10 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
     using Vec3T = nanovdb::Vec3<RealT>;
     using RayT = nanovdb::Ray<RealT>;
 
+    double* device_origin;
+    cudaMalloc(&device_origin, origin.size() * sizeof(double));
+    cudaMemcpy(device_origin, origin.data(), origin.size() * sizeof(double), cudaMemcpyHostToDevice);
+
     auto* h_grid = handle.grid<float>();
     auto* h_label_grid = label_handle.grid<uint32_t>();
     if (!h_grid)
@@ -46,7 +50,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
     RayGenOp<Vec3T> rayGenOp(wBBoxDimZ, wBBoxCenter);
     CompositeOp     compositeOp;
 
-    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, origin] __hostdev__(int start, int end, float* image, const GridT* grid, const LabelGridT* label_grid) {
+    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, device_origin] __hostdev__(int start, int end, float* image, const GridT* grid, const LabelGridT* label_grid) {
         // get an accessor.
         auto acc = grid->tree().getAccessor();
         auto label_acc = label_grid->tree().getAccessor();
@@ -69,9 +73,9 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
             rayDir[1] = rotationMatrix[1][0] * x + rotationMatrix[1][1] * y + rotationMatrix[1][2] * z;
             rayDir[2] = rotationMatrix[2][0] * x + rotationMatrix[2][1] * y + rotationMatrix[2][2] * z;
  
-            rayEye[0] = origin[0];
-            rayEye[1] = origin[1];
-            rayEye[2] = origin[2];
+            rayEye[0] = device_origin[0]; 
+            rayEye[1] = device_origin[1]; 
+            rayEye[2] = device_origin[2]; 
 
             // generate ray.
             RayT wRay(rayEye, rayDir);
