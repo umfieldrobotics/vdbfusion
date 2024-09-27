@@ -60,7 +60,7 @@ public:
     }
 
     /// @brief Integrate incoming TSDF grid inside the current volume using the TSDF equations
-    void Integrate(openvdb::FloatGrid::Ptr grid,
+    void Integrate(openvdb::points::PointDataGrid::Ptr grid,
                    const std::function<float(float)>& weighting_function);
 
     /// @brief Fuse a new given sdf value at the given voxel location, thread-safe
@@ -68,18 +68,27 @@ public:
                     const openvdb::Coord& voxel,
                     const std::function<float(float)>& weighting_function);
 
+    /// @brief Pass in sdf value and weighting function and update the point at that voxel
+    void UpdateVoxel(const openvdb::Coord& voxel,
+                     const float& sdf,
+                     const std::function<float(float)>& weighting_function);
+
+    /// @brief Pass in sdf, weighting function, and label predictin and update the point in that voxel
+    void UpdateVoxel(const openvdb::Coord& voxel,
+                     const float& sdf,
+                     const std::function<float(float)>& weighting_function,
+                     const uint16_t label);
+
     /// @brief Prune TSDF grids, ideal utility to cleanup a D(x) volume before exporting it
-    openvdb::FloatGrid::Ptr Prune(float min_weight) const;
+    openvdb::points::PointDataGrid::Ptr Prune(float min_weight) const;
 
     /// @brief Extracts a TriangleMesh as the iso-surface in the actual volume
     [[nodiscard]] std::tuple<std::vector<Eigen::Vector3d>, std::vector<Eigen::Vector3i>, std::vector<int>>
     ExtractTriangleMesh(bool fill_holes = true, float min_weight = 0.5) const;
 
 public:
-    /// OpenVDB Grids modeling the signed distance field and the weight grid
-    openvdb::FloatGrid::Ptr tsdf_;
-    openvdb::FloatGrid::Ptr weights_;
-    openvdb::UInt32Grid::Ptr instances_;
+    /// OpenVDB Grids containing attributes: tsdf, weight, and instance
+    openvdb::points::PointDataGrid::Ptr grid_;
 
     /// VDBVolume public properties
     float voxel_size_;

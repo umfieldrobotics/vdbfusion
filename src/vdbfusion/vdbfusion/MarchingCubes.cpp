@@ -66,63 +66,63 @@ VDBVolume::ExtractTriangleMesh(bool fill_holes, float min_weight) const {
         edgeindex_to_vertexindex;
     int edge_to_index[12];
 
-    auto tsdf_acc = tsdf_->getAccessor();
-    auto weights_acc = weights_->getAccessor();
-    auto labels_acc = instances_->getAccessor();
-    for (auto iter = tsdf_->beginValueOn(); iter; ++iter) {
-        int cube_index = 0;
-        float f[8];
-        const openvdb::Coord& voxel = iter.getCoord();
-        const int32_t x = voxel.x();
-        const int32_t y = voxel.y();
-        const int32_t z = voxel.z();
-        for (int i = 0; i < 8; i++) {
-            openvdb::Coord idx = voxel + openvdb::shift[i];
-            if (!fill_holes) {
-                if (weights_acc.getValue(idx) == 0.0f) {
-                    cube_index = 0;
-                    break;
-                }
-            }
-            if (weights_acc.getValue(idx) < min_weight) {
-                cube_index = 0;
-                break;
-            }
-            f[i] = tsdf_acc.getValue(idx);
-            if (f[i] < 0.0f) {
-                cube_index |= (1 << i);
-            }
-        }
-        if (cube_index == 0 || cube_index == 255) {
-            continue;
-        }
-        for (int i = 0; i < 12; i++) {
-            if ((edge_table[cube_index] & (1 << i)) != 0) {
-                Eigen::Vector4i edge_index = Eigen::Vector4i(x, y, z, 0) + edge_shift[i];
-                if (edgeindex_to_vertexindex.find(edge_index) == edgeindex_to_vertexindex.end()) {
-                    edge_to_index[i] = (int)vertices.size();
-                    edgeindex_to_vertexindex[edge_index] = (int)vertices.size();
-                    Eigen::Vector3d pt(half_voxel_length + voxel_size_ * edge_index(0),
-                                       half_voxel_length + voxel_size_ * edge_index(1),
-                                       half_voxel_length + voxel_size_ * edge_index(2));
-                    double f0 = std::abs((double)f[edge_to_vert[i][0]]);
-                    double f1 = std::abs((double)f[edge_to_vert[i][1]]);
-                    pt(edge_index(3)) += f0 * voxel_size_ / (f0 + f1);
-                    vertices.push_back(pt /* + origin_*/);
-                } else {
-                    edge_to_index[i] = edgeindex_to_vertexindex.find(edge_index)->second;
-                }
-            }
-        }
-        for (int i = 0; tri_table[cube_index][i] != -1; i += 3) {
-            auto label = labels_acc.getValue(openvdb::Coord(voxel.x(), voxel.y(), voxel.z())); // this should be the instance label for that voxel
-            triangles.emplace_back(edge_to_index[tri_table[cube_index][i]],
-                                   edge_to_index[tri_table[cube_index][i + 2]],
-                                   edge_to_index[tri_table[cube_index][i + 1]]);
+    // auto tsdf_acc = tsdf_->getAccessor();
+    // auto weights_acc = weights_->getAccessor();
+    // auto labels_acc = instances_->getAccessor();
+    // for (auto iter = tsdf_->beginValueOn(); iter; ++iter) {
+    //     int cube_index = 0;
+    //     float f[8];
+    //     const openvdb::Coord& voxel = iter.getCoord();
+    //     const int32_t x = voxel.x();
+    //     const int32_t y = voxel.y();
+    //     const int32_t z = voxel.z();
+    //     for (int i = 0; i < 8; i++) {
+    //         openvdb::Coord idx = voxel + openvdb::shift[i];
+    //         if (!fill_holes) {
+    //             if (weights_acc.getValue(idx) == 0.0f) {
+    //                 cube_index = 0;
+    //                 break;
+    //             }
+    //         }
+    //         if (weights_acc.getValue(idx) < min_weight) {
+    //             cube_index = 0;
+    //             break;
+    //         }
+    //         f[i] = tsdf_acc.getValue(idx);
+    //         if (f[i] < 0.0f) {
+    //             cube_index |= (1 << i);
+    //         }
+    //     }
+    //     if (cube_index == 0 || cube_index == 255) {
+    //         continue;
+    //     }
+    //     for (int i = 0; i < 12; i++) {
+    //         if ((edge_table[cube_index] & (1 << i)) != 0) {
+    //             Eigen::Vector4i edge_index = Eigen::Vector4i(x, y, z, 0) + edge_shift[i];
+    //             if (edgeindex_to_vertexindex.find(edge_index) == edgeindex_to_vertexindex.end()) {
+    //                 edge_to_index[i] = (int)vertices.size();
+    //                 edgeindex_to_vertexindex[edge_index] = (int)vertices.size();
+    //                 Eigen::Vector3d pt(half_voxel_length + voxel_size_ * edge_index(0),
+    //                                    half_voxel_length + voxel_size_ * edge_index(1),
+    //                                    half_voxel_length + voxel_size_ * edge_index(2));
+    //                 double f0 = std::abs((double)f[edge_to_vert[i][0]]);
+    //                 double f1 = std::abs((double)f[edge_to_vert[i][1]]);
+    //                 pt(edge_index(3)) += f0 * voxel_size_ / (f0 + f1);
+    //                 vertices.push_back(pt /* + origin_*/);
+    //             } else {
+    //                 edge_to_index[i] = edgeindex_to_vertexindex.find(edge_index)->second;
+    //             }
+    //         }
+    //     }
+    //     for (int i = 0; tri_table[cube_index][i] != -1; i += 3) {
+    //         auto label = labels_acc.getValue(openvdb::Coord(voxel.x(), voxel.y(), voxel.z())); // this should be the instance label for that voxel
+    //         triangles.emplace_back(edge_to_index[tri_table[cube_index][i]],
+    //                                edge_to_index[tri_table[cube_index][i + 2]],
+    //                                edge_to_index[tri_table[cube_index][i + 1]]);
 
-            tri_labels.emplace_back(label);
-        }
-    }
+    //         tri_labels.emplace_back(label);
+    //     }
+    // }
 
 
     return std::make_tuple(vertices, triangles, tri_labels);
