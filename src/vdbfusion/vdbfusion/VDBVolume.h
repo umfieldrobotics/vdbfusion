@@ -44,6 +44,7 @@ public:
                    const std::vector<uint32_t>& labels,
                    const Eigen::Vector3d& origin,
                    const std::function<float(float)>& weighting_function);
+
     /// @brief Integrates a new (globally aligned) PointCloud into the current
     /// tsdf_ volume.
     void Integrate(const std::vector<Eigen::Vector3d>& points,
@@ -57,6 +58,16 @@ public:
                           const std::function<float(float)>& weighting_function) {
         const Eigen::Vector3d& origin = extrinsics.block<3, 1>(0, 3);
         Integrate(points, origin, weighting_function);
+    }
+
+    /// @brief Integrates a new (globally aligned) PointCloud into the current
+    /// tsdf_ volume.
+    void inline Integrate(const std::vector<Eigen::Vector3d>& points,
+                          const std::vector<uint32_t>& labels,
+                          const Eigen::Matrix4d& extrinsics,
+                          const std::function<float(float)>& weighting_function) {
+        const Eigen::Vector3d& origin = extrinsics.block<3, 1>(0, 3);
+        Integrate(points, labels, origin, weighting_function);
     }
 
     /// @brief Integrate incoming TSDF grid inside the current volume using the TSDF equations

@@ -67,9 +67,9 @@ class VDBFusionPipeline:
     def _run_tsdf_pipeline(self):
         times = []
         for idx in trange(self._jump, self._jump + self._n_scans, unit=" frames"):
-            scan, pose = self._dataset[idx]
+            scan, labels, pose = self._dataset[idx]
             tic = time.perf_counter_ns()
-            self._tsdf_volume.integrate(scan, pose)
+            self._tsdf_volume.integrate(scan, labels, pose) # labels might be None
             toc = time.perf_counter_ns()
             times.append(toc - tic)
         self._res = {"mesh": self._get_o3d_mesh(self._tsdf_volume, self._config), "times": times}

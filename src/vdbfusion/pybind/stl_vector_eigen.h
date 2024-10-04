@@ -130,3 +130,27 @@ py::class_<Vector, holder_type> pybind_eigen_vector_of_vector(py::module& m,
 
     return vec;
 }
+
+// Template function to bind std::vector<uint32_t>
+template<typename T>
+py::class_<std::vector<T>> pybind_vector_of_uint32(py::module &m, const std::string &name, const std::string &doc) {
+    return py::class_<std::vector<T>>(m, name.c_str(), doc.c_str())
+        .def(py::init<>())
+        .def(py::init<const std::vector<T>&>())
+        .def("__len__", [](const std::vector<T>& v) { return v.size(); })
+        .def("__getitem__", [](const std::vector<T>& v, size_t i) {
+            if (i >= v.size()) throw std::out_of_range("Index out of range");
+            return v[i];
+        })
+        .def("__setitem__", [](std::vector<T>& v, size_t i, T val) {
+            if (i >= v.size()) throw std::out_of_range("Index out of range");
+            v[i] = val;
+        })
+        .def("clear", &std::vector<T>::clear)
+        .def("append", [](std::vector<T>& v, T val) { v.push_back(val); })
+        .def("from_array", [](const py::array_t<uint32_t>& array) {
+            std::vector<uint32_t> vec(array.size());
+            std::memcpy(vec.data(), array.data(), array.size() * sizeof(uint32_t));
+            return vec;
+        });
+}

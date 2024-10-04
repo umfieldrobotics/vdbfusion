@@ -46,24 +46,36 @@ class KITTIOdometryDataset:
         self.config = load_config(config_file)
         self.kitti_sequence_dir = os.path.join(kitti_root_dir, "sequences", self.sequence)
         self.velodyne_dir = os.path.join(self.kitti_sequence_dir, "velodyne/")
+        self.label_dir = os.path.join(self.kitti_sequence_dir, "labels/")
 
         # Read stuff
         self.calibration = self.read_calib_file(os.path.join(self.kitti_sequence_dir, "calib.txt"))
         self.poses = self.load_poses(os.path.join(kitti_root_dir, f"poses/{self.sequence}.txt"))
         self.scan_files = sorted(glob.glob(self.velodyne_dir + "*.bin"))
+        if os.path.exists(self.label_dir):
+            self.label_files = sorted(glob.glob(self.label_dir + "*.label"))
+        else:
+            print("No ground truth label files found. Continuing with methods to predict and track instance semantics.")
+            self.label_files = None
 
         # Cache
         self.use_cache = True
         self.cache = get_cache(directory="cache/kitti/")
 
     def __getitem__(self, idx):
-        return self.scans(idx), self.poses[idx]
+        return self.scans(idx), self.labels(idx), self.poses[idx]
 
     def __len__(self):
         return len(self.scan_files)
 
     def scans(self, idx):
         return self.read_point_cloud(idx, self.scan_files[idx], self.config)
+
+    def labels(self, idx):
+        if self.label_files is not None:
+            return self.read_labels(self.label_files[idx])
+        else:
+            return None
 
     @memoize()
     def read_point_cloud(self, idx: int, scan_file: str, config: dict):
@@ -73,6 +85,10 @@ class KITTIOdometryDataset:
         points = points[np.linalg.norm(points, axis=1) >= config.min_range]
         points = transform_points(points, self.poses[idx]) if config.apply_pose else None
         return points
+
+    @memoize()
+    def read_labels(self, label_file):
+        return np.fromfile(label_file, dtype=np.int32).reshape((-1)) # n x 1 vector where each int contains the semantic label in the lower 16 bits and the instance label in the upper 16 bits
 
     @staticmethod
     def _correct_scan(scan: np.ndarray):

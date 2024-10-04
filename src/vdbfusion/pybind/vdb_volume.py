@@ -85,9 +85,30 @@ class VDBVolume:
     def integrate(self, grid) -> None:
         ...
 
+    @overload
+    def integrate(self, points: np.ndarray, labels: np.ndarray, extrinsic: np.ndarray) -> None:
+        ...
+
+    @overload
+    def integrate(self, points: np.ndarray, labels: np.ndarray, origin: np.ndarray) -> None:
+        ...
+
+    @overload
+    def integrate(self, points: np.ndarray, labels: np.ndarray, extrinsic: np.ndarray, weight: float) -> None:
+        ...
+
+    @overload
+    def integrate(self, points: np.ndarray, labels: np.ndarray, weight: float) -> None:
+        ...
+
+    @overload
+    def integrate(self, points: np.ndarray, labels: np.ndarray, weighting_function: Callable[[float], float]) -> None:
+        ...
+
     def integrate(
         self,
         points: Optional[np.ndarray] = None,
+        labels: Optional[np.ndarray] = None,
         extrinsic: Optional[np.ndarray] = None,
         grid: Optional[Any] = None,
         weight: Optional[float] = None,
@@ -104,6 +125,8 @@ class VDBVolume:
         else:
             assert isinstance(points, np.ndarray), "points must by np.ndarray(n, 3)"
             assert points.dtype == np.float64, "points dtype must be np.float64"
+            assert isinstance(labels, np.ndarray), "labels must by np.ndarray(n, 1)"
+            assert labels.dtype == np.int32, "labels dtype must be np.int32"
             assert isinstance(extrinsic, np.ndarray), "origin/extrinsic must by np.ndarray"
             assert extrinsic.dtype == np.float64, "origin/extrinsic dtype must be np.float64"
             assert extrinsic.shape in [
@@ -113,11 +136,19 @@ class VDBVolume:
             ], "origin/extrinsic must be a (3,) array or a (4,4) matrix"
 
             _points = vdbfusion_pybind._VectorEigen3d(points)
-            if weighting_function is not None:
-                return self._volume._integrate(_points, extrinsic, weighting_function)
-            if weight is not None:
-                return self._volume._integrate(_points, extrinsic, weight)
-            self._volume._integrate(_points, extrinsic)
+            _labels = None if labels is None else labels.tolist() #vdbfusion_pybind._VectorUint32(labels)
+            if labels is not None:
+                if weighting_function is not None:
+                    return self._volume._integrate(_points, _labels, extrinsic, weighting_function)
+                if weight is not None:
+                    return self._volume._integrate(_points, _labels, extrinsic, weight)
+                return self._volume._integrate(_points, _labels, extrinsic)
+            else:
+                if weighting_function is not None:
+                    return self._volume._integrate(_points, extrinsic, weighting_function)
+                if weight is not None:
+                    return self._volume._integrate(_points, extrinsic, weight)
+                return self._volume._integrate(_points, extrinsic)
 
     @overload
     def update_tsdf(
@@ -151,7 +182,7 @@ class VDBVolume:
             o3d.utility.Vector3iVector(triangles),
         )
         """
-        vertices, triangles = self._volume._extract_triangle_mesh(fill_holes, min_weight)
+        vertices, triangles, _ = self._volume._extract_triangle_mesh(fill_holes, min_weight)
         return np.asarray(vertices), np.asarray(triangles)
 
     def extract_vdb_grids(self, out_file: str) -> None:

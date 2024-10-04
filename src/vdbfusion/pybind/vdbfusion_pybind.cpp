@@ -59,6 +59,10 @@ PYBIND11_MODULE(vdbfusion_pybind, m) {
     auto vector3ivector = pybind_eigen_vector_of_vector<Eigen::Vector3i>(
         m, "_VectorEigen3i", "std::vector<Eigen::Vector3i>",
         py::py_array_to_vectors_int<Eigen::Vector3i>);
+
+    auto vectorUint32 = pybind_vector_of_uint32<uint32_t>(
+        m, "_VectorUint32", "std::vector<uint32_t>");
+
     py::class_<VDBVolume, std::shared_ptr<VDBVolume>> vdb_volume(
         m, "_VDBVolume",
         "This is the low level C++ bindings, all the methods and "
@@ -80,10 +84,17 @@ PYBIND11_MODULE(vdbfusion_pybind, m) {
         .def(
             "_integrate",
             [](VDBVolume& self, const std::vector<Eigen::Vector3d>& points,
-               const Eigen::Vector3d& origin) {
+               const Eigen::Vector3d& origin) {                                
                 self.Integrate(points, origin, [](float /*sdf*/) { return 1.0f; });
             },
             "points"_a, "origin"_a)
+        .def(
+            "_integrate",
+            [](VDBVolume& self, const std::vector<Eigen::Vector3d>& points, const std::vector<uint32_t>& labels,
+               const Eigen::Vector3d& origin) {
+                self.Integrate(points, labels, origin, [](float /*sdf*/) { return 1.0f; });
+            },
+            "points"_a, "labels"_a, "origin"_a)
         .def(
             "_integrate",
             [](VDBVolume& self, const std::vector<Eigen::Vector3d>& points,
@@ -91,6 +102,13 @@ PYBIND11_MODULE(vdbfusion_pybind, m) {
                 self.Integrate(points, origin, [=](float /*sdf*/) { return weight; });
             },
             "points"_a, "origin"_a, "weight"_a)
+        .def(
+            "_integrate",
+            [](VDBVolume& self, const std::vector<Eigen::Vector3d>& points, const std::vector<uint32_t>& labels,
+               const Eigen::Matrix4d& extrinsics) {
+                self.Integrate(points, labels, extrinsics, [](float /*sdf*/) { return 1.0f; });
+            },
+            "points"_a, "labels"_a, "extrinsic"_a)
         .def(
             "_integrate",
             [](VDBVolume& self, const std::vector<Eigen::Vector3d>& points,
@@ -153,6 +171,7 @@ PYBIND11_MODULE(vdbfusion_pybind, m) {
         .def("_prune", &VDBVolume::Prune, "min_weight"_a)
         .def_readwrite("_tsdf", &VDBVolume::tsdf_)
         .def_readwrite("_weights", &VDBVolume::weights_)
+        .def_readwrite("_instances", &VDBVolume::instances_)
 #endif
         .def_readwrite("_voxel_size", &VDBVolume::voxel_size_)
         .def_readwrite("_sdf_trunc", &VDBVolume::sdf_trunc_)

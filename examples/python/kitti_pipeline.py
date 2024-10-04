@@ -14,7 +14,7 @@ def main(
     config: str = "config/kitti.yaml",
     n_scans: int = -1,
     jump: int = 0,
-    visualize: bool = False,
+    visualize: bool = True,
 ):
     """Help here!"""
     dataset = Dataset(kitti_root_dir, sequence, config)
