@@ -4,6 +4,7 @@
 **/*cache
 .vscode/
 examples/cpp/out/
+examples/python/out
 **/dataset/
 examples/notebooks/semantic-kitti-odometry/
 

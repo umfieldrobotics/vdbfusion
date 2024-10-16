@@ -28,6 +28,15 @@
 #include <openvdb/math/Ray.h>
 #include <openvdb/openvdb.h>
 
+#include "nanovdb_utils/common.h"
+#include <nanovdb/util/Ray.h>
+#include <nanovdb/util/HDDA.h>
+#include <nanovdb/util/IO.h>
+#include <nanovdb/util/Primitives.h>
+#include <nanovdb/util/CudaDeviceBuffer.h>
+#include <nanovdb/NanoVDB.h>
+#include <nanovdb/util/OpenToNanoVDB.h>
+
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
@@ -35,6 +44,14 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+
+// #define NANOVDB_USE_CUDA
+
+#if defined(NANOVDB_USE_CUDA)
+using BufferT = nanovdb::CudaDeviceBuffer;
+#else
+using BufferT = nanovdb::HostBuffer;
+#endif
 
 namespace {
 
@@ -212,6 +229,41 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
             }
         } while (dda.step());
     });
+}
+
+void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
+    // Render image and save as pfm
+    std::cout << "\nFrame #" << index << std::endl;
+    const int numIterations = 50; //  what does this do?
+    const int width = 691;
+    const int height = 256;
+
+    auto timer_imgbuff0 = std::chrono::high_resolution_clock::now();
+    BufferT imageBuffer;
+    imageBuffer.init(3 * width * height * sizeof(float)); // needs to be a 3 channel image
+    auto timer_imgbuff1 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed0 = timer_imgbuff1 - timer_imgbuff0;
+    std::cout << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
+
+    auto timer_nanovdbconv0 = std::chrono::high_resolution_clock::now();
+    openvdb::FloatGrid::Ptr openvdbGrid = tsdf_;
+    openvdb::UInt32Grid::Ptr openvdbGridLabels = instances_;
+    openvdb::CoordBBox bbox;
+
+    nanovdb::GridHandle<BufferT> handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGrid);
+    nanovdb::GridHandle<BufferT> label_handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGridLabels);
+
+    auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
+    std::cout << "Conversion to NanoVDB took: " << elapsed1.count() << " ms" << std::endl;
+
+    auto timer_render0 = std::chrono::high_resolution_clock::now();
+
+    runNanoVDB(handle, label_handle, numIterations, width, height, imageBuffer, index, origin_vec);
+
+    auto timer_render1 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed2 = timer_render1 - timer_render0;
+    std::cout << "NanoVDB rendering took: " << elapsed2.count() << " ms" << std::endl;
 }
 
 openvdb::FloatGrid::Ptr VDBVolume::Prune(float min_weight) const {

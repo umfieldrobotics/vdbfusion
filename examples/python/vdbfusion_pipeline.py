@@ -70,6 +70,8 @@ class VDBFusionPipeline:
             scan, labels, pose = self._dataset[idx]
             tic = time.perf_counter_ns()
             self._tsdf_volume.integrate(scan, labels, pose) # labels might be None
+            origin = [pose[0][3], pose[1][3], pose[2][3]] # pose is a 4 x 4 homogenous matrix
+            self._tsdf_volume.render(origin, idx)
             toc = time.perf_counter_ns()
             times.append(toc - tic)
         self._res = {"mesh": self._get_o3d_mesh(self._tsdf_volume, self._config), "times": times}

@@ -142,6 +142,12 @@ PYBIND11_MODULE(vdbfusion_pybind, m) {
             "grid"_a, "weight"_a)
 #endif
         .def(
+            "_render",
+            [](VDBVolume& self, const std::vector<double> origin_vec, const int index) {
+                self.Render(origin_vec, index);
+            },
+            "origin_vec"_a, "index"_a)
+        .def(
             "_update_tsdf",
             [](VDBVolume& self, const float& sdf, std::vector<int>& ijk,
                const std::function<float(float)>& weighting_function) {

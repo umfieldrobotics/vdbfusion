@@ -20,11 +20,24 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.18)
 project(VDBFusion VERSION 0.1.6 LANGUAGES CXX)
+
+find_package(CUDA)
+
+# Include nanovdb common.h
+include_directories(/usr/local/cuda/include)
+include_directories(${CMAKE_SOURCE_DIR})
+include_directories(/home/anjashep-frog-lab/Research/vdbfusion_mapping/vdbfusion/vdbfusion/nanovdb_utils)
+
+# Set CUDA compilation flags
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} --extended-lambda")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 
 add_library(vdbfusion STATIC)
 add_library(VDBFusion::vdbfusion ALIAS vdbfusion)
+cuda_add_library(cuda_lib STATIC nanovdb_utils/nanovdb.cu)
+add_library(VDBFusion::cuda_lib ALIAS cuda_lib)
 
 # In case we are building this as a standalone project, we should look here the dependencies
 if(NOT TARGET Eigen3::Eigen OR NOT TARGET OpenVDB::openvdb)
@@ -43,7 +56,7 @@ set_target_properties(vdbfusion PROPERTIES PUBLIC_HEADER "VDBVolume.h")
 target_include_directories(
   vdbfusion PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
                                                        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(vdbfusion PUBLIC Eigen3::Eigen OpenVDB::openvdb)
+target_link_libraries(vdbfusion PUBLIC Eigen3::Eigen OpenVDB::openvdb cuda_lib)
 
 # NOTE: Installation is still work in progress, therefore we only support dev machines with all the 3rdparty
 # dependencies locally installed

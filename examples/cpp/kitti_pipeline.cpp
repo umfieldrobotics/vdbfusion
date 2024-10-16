@@ -36,29 +36,11 @@
 #include "utils/Iterable.h"
 #include "utils/Timers.h"
 
-#include "nanovdb_utils/common.h"
-#include <nanovdb/util/Ray.h> 
-#include <nanovdb/util/HDDA.h>
-#include <nanovdb/util/IO.h>
-#include <nanovdb/util/Primitives.h>
-#include <nanovdb/util/CudaDeviceBuffer.h>
-#include <nanovdb/NanoVDB.h>
-#include <nanovdb/util/OpenToNanoVDB.h>
-
 #include "open3d/Open3D.h"
 
 #include <sstream>
 #include <vector>
 #include <chrono>
-
-
-// #define NANOVDB_USE_CUDA
-
-#if defined(NANOVDB_USE_CUDA)
-using BufferT = nanovdb::CudaDeviceBuffer;
-#else
-using BufferT = nanovdb::HostBuffer;
-#endif
 
 
 // Namespace aliases
@@ -137,47 +119,11 @@ int main(int argc, char* argv[]) {
         tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; });
         timer.toc();
 
-        // Render image and save as pfm
-        std::cout << "\nFrame #" << index << std::endl;
-        const int numIterations = 50; //  what does this do?
-        const int width = 691;
-        const int height = 256;
-
-        auto timer_imgbuff0 = std::chrono::high_resolution_clock::now();
-        BufferT imageBuffer;
-        imageBuffer.init(3 * width * height * sizeof(float)); // needs to be a 3 channel image
-        auto timer_imgbuff1 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> elapsed0 = timer_imgbuff1 - timer_imgbuff0;
-        std::cout << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
-
-        auto timer_nanovdbconv0 = std::chrono::high_resolution_clock::now();
-        openvdb::FloatGrid::Ptr openvdbGrid = tsdf_volume.tsdf_;
-        openvdb::UInt32Grid::Ptr openvdbGridLabels = tsdf_volume.instances_;
-        openvdb::CoordBBox bbox;
-        // if (openvdbGrid->tree().evalActiveVoxelBoundingBox(bbox)) {
-        //     // Print the dimensions of the bounding box
-        //     openvdb::Coord dim = bbox.dim();
-        //     std::cout << "Bounding box dimensions: " << dim.x() << " x " << dim.y() << " x " << dim.z() << std::endl;
-        // } else {
-        //     std::cout << "No active voxels in the grid." << std::endl;
-        // }
-        nanovdb::GridHandle<BufferT> handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGrid);
-        nanovdb::GridHandle<BufferT> label_handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGridLabels);
-
-        auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
-        std::cout << "Conversion to NanoVDB took: " << elapsed1.count() << " ms" << std::endl;
-
-        auto timer_render0 = std::chrono::high_resolution_clock::now();
-
-        std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
-        runNanoVDB(handle, label_handle, numIterations, width, height, imageBuffer, index, origin_vec);
-
-        auto timer_render1 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> elapsed2 = timer_render1 - timer_render0;
-        std::cout << "NanoVDB rendering took: " << elapsed2.count() << " ms" << std::endl;
-
+        timer.tic();
+        std::vector<double> origin_vec = {origin(0), origin(1), origin(2)}; 
+        tsdf_volume.Render(origin_vec, index);
         index++;
+        timer.toc();
     }
 
 
@@ -235,8 +181,6 @@ int main(int argc, char* argv[]) {
         }
         
     }
-
-
 
     return 0;
 }

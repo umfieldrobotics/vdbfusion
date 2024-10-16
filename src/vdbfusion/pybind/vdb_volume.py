@@ -150,6 +150,13 @@ class VDBVolume:
                     return self._volume._integrate(_points, extrinsic, weight)
                 return self._volume._integrate(_points, extrinsic)
 
+    def render(self, origin_vec, index):
+        """Render a viewpoint of the volume from origin.
+
+        Uses nanovdb (and so requires CUDA) for fast rendering.
+        """
+        return self._volume._render(origin_vec, index)
+
     @overload
     def update_tsdf(
         self, sdf: float, ijk: np.ndarray, weighting_function: Optional[Callable[[float], float]]
