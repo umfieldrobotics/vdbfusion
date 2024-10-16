@@ -74,6 +74,10 @@ public:
     void Integrate(openvdb::FloatGrid::Ptr grid,
                    const std::function<float(float)>& weighting_function);
 
+    /// @brief Render volume from viewpoint of origin and save as a pfm
+    void Render(const std::vector<double> origin_vec,
+                const int index);
+
     /// @brief Fuse a new given sdf value at the given voxel location, thread-safe
     void UpdateTSDF(const float& sdf,
                     const openvdb::Coord& voxel,

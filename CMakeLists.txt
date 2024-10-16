@@ -23,7 +23,9 @@
 cmake_minimum_required(VERSION 3.15)
 project(VDBFusion VERSION 0.1.6 LANGUAGES CXX)
 
-set(CMAKE_CXX_FLAGS "-g") 
+set(CMAKE_CXX_FLAGS "-g")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 
 # Setup build options
 option(USE_CCACHE "Build using Ccache if found on the path" ON)

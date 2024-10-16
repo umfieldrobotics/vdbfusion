@@ -46,11 +46,6 @@ find_package(CUDA REQUIRED)
 
 # add_compile_definitions(NANOVDB_USE_CUDA)
 
-# Include nanovdb common.h
-include_directories(/usr/local/cuda/include)
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(/home/anjashep-frog-lab/Research/vdbfusion_mapping/vdbfusion/examples/cpp/nanovdb_utils)
-
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -60,7 +55,7 @@ add_subdirectory(datasets)
 
 set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -std=c++17 --extended-lambda)  # Add --extended-lambda flag
 
-cuda_add_executable(kitti_pipeline kitti_pipeline.cpp nanovdb_utils/nanovdb.cu)
+add_executable(kitti_pipeline kitti_pipeline.cpp)
 target_compile_features(kitti_pipeline PUBLIC cxx_std_17)
 target_link_libraries(kitti_pipeline TBB::tbb VDBFusion::vdbfusion argparse::argparse fmt::fmt igl::core datasets yaml-cpp ${CUDA_LIBRARIES})
 set_target_properties(kitti_pipeline PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
