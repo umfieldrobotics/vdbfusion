@@ -304,21 +304,23 @@ if __name__=='__main__':
             break
         width, height = frame.shape[:2][::-1]
         
-        if ann_frame_idx == 20:
-            pr = run_semantic_model(model, frame)
+        if ann_frame_idx == 10:
+            predictor.reset_state()
+
+            # pr = run_semantic_model(model, frame)
             
-            new_predictor = build_sam2_camera_predictor(model_cfg, sam2_checkpoint)
-            new_predictor.load_first_frame(frame)
-            prompts = np.array(pr, dtype=np.float32)
-            predictors.append([new_predictor, prompts, 20, 0])
-            for idx, points in enumerate(prompts):
-                for j in range(points.shape[1]):
-                    _, out_obj_ids, out_mask_logits = new_predictor.add_new_prompt(
-                        frame_idx=ann_frame_idx-20,
-                        obj_id=idx,
-                        points=[points[j]],
-                        labels=labels,
-                    )
+            # new_predictor = build_sam2_camera_predictor(model_cfg, sam2_checkpoint)
+            # new_predictor.load_first_frame(frame)
+            # prompts = np.array(pr, dtype=np.float32)
+            # predictors.append([new_predictor, prompts, 20, 0])
+            # for idx, points in enumerate(prompts):
+            #     for j in range(points.shape[1]):
+            #         _, out_obj_ids, out_mask_logits = new_predictor.add_new_prompt(
+            #             frame_idx=ann_frame_idx-20,
+            #             obj_id=idx,
+            #             points=[points[j]],
+            #             labels=labels,
+            #         )
             # show_points(np.array([[300, 250]], dtype=np.float32), labels, plt.gca())
             
         if ann_frame_idx % vis_gap == 0:
