@@ -50,7 +50,7 @@ class KITTIOdometryDataset:
         self.velodyne_dir = os.path.join(self.kitti_sequence_dir, "velodyne/")
         self.image_dir = os.path.join(self.kitti_sequence_dir, "image_2/")
         self.depth_dir = os.path.join(self.kitti_sequence_dir, "depth_tif/")
-        self.label_dir = os.path.join(self.kitti_sequence_dir, "image_2/")
+        self.label_dir = os.path.join(self.kitti_sequence_dir, "image_2_labels/")
 
         # Read stuff
         self.calibration = self.read_calib_file(os.path.join(self.kitti_sequence_dir, "calib.txt"))
@@ -67,10 +67,15 @@ class KITTIOdometryDataset:
         # Cache
         self.use_cache = True
         self.cache = get_cache(directory="cache/kitti/")
+        
+        # ConvBKI labels
+        self.label_to_id = {(0, 128, 128): 0, (0, 0, 128): 1, (128, 0, 64): 2, (128, 64, 64): 3, (128, 128, 128): 4, (128, 128, 192): 5, 
+                            (128, 192, 192): 6, (192, 0, 0): 7, (192, 128, 0): 8, (128, 64, 128): 9, (0, 64, 64): 10}
 
     def __getitem__(self, idx):
         # return self.scans(idx), self.labels(idx), self.poses[idx]
-        return self.rgbds(idx), self.labels(idx), self.poses[idx]
+        points, labels = self.rgbds_and_labels(idx)
+        return points, labels, self.poses[idx]
 
     def __len__(self):
         return len(self.scan_files)
@@ -79,6 +84,9 @@ class KITTIOdometryDataset:
         return self.read_point_cloud(idx, self.scan_files[idx], self.config)
     
     def rgbds(self, idx):
+        return self.read_rgbds(idx, self.image_files[idx], self.depth_files[idx], self.label_files[idx], self.config)
+
+    def rgbds_and_labels(self, idx):
         return self.read_rgbds(idx, self.image_files[idx], self.depth_files[idx], self.label_files[idx], self.config)
 
     def labels(self, idx):
@@ -103,36 +111,30 @@ class KITTIOdometryDataset:
         fy = 718.856
         cx = 607.1928
         cy = 185.2157
-        MAX_DEPTH_RANGE = 30
-        T_cam_velo = np.array([[4.276802385584e-04, -9.999672484946e-01, -8.084491683471e-03, -1.198459927713e-02],
-                            [-7.210626507497e-03, 8.081198471645e-03, -9.999413164504e-01, -5.403984729748e-02],
-                            [9.999738645903e-01, 4.859485810390e-04, -7.206933692422e-03, -2.921968648686e-01],
-                            [0.0, 0.0, 0.0, 1.0]])
-        T_velo_cam = np.linalg.inv(T_cam_velo)
 
         depth_data = cv2.imread(depth_file, cv2.IMREAD_UNCHANGED)
+        labels_in = self.read_labels(label_file)
         points = []
+        labels = []
         for i in range(depth_data.shape[0]):
             for j in range(depth_data.shape[1]):
                 z = depth_data[i, j]
-                if z < 0 or z == None or z > MAX_DEPTH_RANGE:
+                if z < 0 or z == None or z > config['max_range']:
                     continue
                 
                 x = (j - cx) * z / fx
                 y = (i - cy) * z / fy
                 
                 points.append([x, y, z])
+                labels.append(self.label_to_id[tuple(labels_in[i, j])])
         points = np.array(points)
+        labels = np.array(labels).astype(np.int32)
         points = self._correct_scan(points) if config.correct_scan else points[:, :3]
-        self.poses[idx] = T_velo_cam @ self.poses[idx]
         points = transform_points(points, self.poses[idx]) if config.apply_pose else None
-        return points
+        return points, labels
 
     def read_labels(self, label_file):
-        a = cv2.imread(label_file, cv2.IMREAD_UNCHANGED) # TODO FIX BACK TO LABEL IMAGES LATER
-        a = cv2.cvtColor(a, cv2.COLOR_BGR2GRAY)
-        a = a.astype(np.int32).flatten()
-        return a
+        return cv2.imread(label_file, cv2.IMREAD_UNCHANGED)
         # return np.fromfile(label_file, dtype=np.int32).reshape((-1)) # n x 1 vector where each int contains the semantic label in the lower 16 bits and the instance label in the upper 16 bits
 
     @staticmethod
@@ -174,7 +176,7 @@ class KITTIOdometryDataset:
             tr[:3, :4] = _tr
             left = np.einsum("...ij,...jk->...ik", np.linalg.inv(tr), poses_gt)
             right = np.einsum("...ij,...jk->...ik", left, tr)
-            return right
+            return left 
 
         poses = pd.read_csv(poses_file, sep=" ", header=None).values
         n = poses.shape[0]

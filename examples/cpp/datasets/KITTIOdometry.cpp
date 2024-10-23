@@ -186,6 +186,7 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadKITTIDepthAn
         }
     }
 
+    // TODO: delete most of this???
     open3d::geometry::PointCloud pc = open3d::geometry::PointCloud(pc_points);
 
     Eigen::Matrix4d T_cam_velo = Eigen::Matrix4d::Zero();
@@ -309,8 +310,8 @@ std::vector<Eigen::Matrix4d> GetGTPoses(const fs::path& poses_file, const fs::pa
              P_10, P_11, P_12, P_13,
              P_20, P_21, P_22, P_23,
              0.00, 0.00, 0.00, 1.00;
-        // poses.emplace_back(T_velo_cam * P); // IF FROM DEPTH
-        poses.emplace_back(T_velo_cam * P * T_cam_velo); // IF FROM VELODYNE
+        poses.emplace_back(T_velo_cam * P); // IF FROM DEPTH
+        // poses.emplace_back(T_velo_cam * P * T_cam_velo); // IF FROM VELODYNE
     }
     // clang-format on
     return poses; // in velodyne coordinate frame
@@ -352,7 +353,7 @@ KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
     scan_files_ = GetVelodyneFiles(fs::absolute(kitti_sequence_dir / "velodyne/"), n_scans);
     depth_files_ = GetDepthFiles(fs::absolute(kitti_sequence_dir / "depth_tif/"), n_scans);
     gt_label_files_ = GetGTLabelFiles(fs::absolute(kitti_sequence_dir / "labels_txt/"), n_scans);
-    label_files_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "image_2/"), n_scans);
+    label_files_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "image_2_labels/"), n_scans);
 }
 
 std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Vector3d> KITTIDataset::operator[](int idx) const {
