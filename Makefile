@@ -21,19 +21,19 @@
 # SOFTWARE.
 .PHONY: install docker
 install:
-	pip3 -v install . && cp build/*/compile_commands.json build/
+	pip3 -v install . && cp -f build/*/compile_commands.json build/
 
 uninstall:
 	pip3 -v uninstall vdbfusion
 
 dev:
-	pip3 -v install -e . && cp build/*/compile_commands.json build/
+	pip3 -v install -e . && cp -f build/*/compile_commands.json build/
 
 test:
 	pytest .
 
 clean:
-	git clean -xf . && rm -rf build/
+	rm -rf build/
 
 # Docker targets
 docker:

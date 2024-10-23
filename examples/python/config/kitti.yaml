@@ -34,4 +34,4 @@ min_weight: 5.0
 apply_pose: True
 min_range: 2.5
 max_range: 120.0
-correct_scan: True
+correct_scan: False

@@ -137,7 +137,7 @@ std::vector<Eigen::Vector3d> ReadKITTIVelodyne(const std::string& path) {
     return points; // returned in metric Velodyne coordinate frame
 }
 
-std::tuple<std::vector<Eigen::Vector3d>, std::vector<int>> ReadKITTIDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file) {
+std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadKITTIDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file) {
     // Read tiff
     cv::Mat depth_mat = cv::imread(depth_path, cv::IMREAD_UNCHANGED);
 
@@ -163,7 +163,7 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<int>> ReadKITTIDepthAndLabe
     float cy = 185.2157;
 
     std::vector<Eigen::Vector3d> pc_points; // store the 3D points for creating the pointcloud
-    std::vector<int> labels; // store the labels that aren't tossed
+    std::vector<uint32_t> labels; // store the labels that aren't tossed
 
     int num_rows = depth_mat.size().height;
     int num_cols = depth_mat.size().width;
@@ -352,13 +352,13 @@ KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
     scan_files_ = GetVelodyneFiles(fs::absolute(kitti_sequence_dir / "velodyne/"), n_scans);
     depth_files_ = GetDepthFiles(fs::absolute(kitti_sequence_dir / "depth_tif/"), n_scans);
     gt_label_files_ = GetGTLabelFiles(fs::absolute(kitti_sequence_dir / "labels_txt/"), n_scans);
-    // label_files_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "image_2_labels/"), n_scans);
+    label_files_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "image_2/"), n_scans);
 }
 
 std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Vector3d> KITTIDataset::operator[](int idx) const {
-    std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
-    // auto [points, semantics] = ReadKITTIDepthAndLabels(depth_files_[idx], label_files_[idx], "/home/anjashep-frog-lab/Research/vdbfusion_mapping/vdbfusion/examples/notebooks/semantic-kitti-odometry/dataset/sequences/00/calib.txt");
-    std::vector<uint32_t> semantics = ReadKITTIGroundTruthLabels(gt_label_files_[idx]);
+    // std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
+    auto [points, semantics] = ReadKITTIDepthAndLabels(depth_files_[idx], label_files_[idx], "/home/anjashep-frog-lab/Research/vdbfusion_mapping/vdbfusion/examples/notebooks/semantic-kitti-odometry/dataset/sequences/00/calib.txt");
+    // std::vector<uint32_t> semantics = ReadKITTIGroundTruthLabels(gt_label_files_[idx]);
 
     if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
     if (apply_pose_) TransformPoints(points, poses_[idx]);
