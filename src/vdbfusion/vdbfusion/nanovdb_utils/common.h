@@ -26,7 +26,7 @@ using LabelGridT = nanovdb::UInt32Grid;
 extern "C" {
 #endif
 
-extern void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<BufferT>& label_handle, int numIterations, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin);
+extern void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<BufferT>& label_handle, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin);
 
 #ifdef __cplusplus
 }

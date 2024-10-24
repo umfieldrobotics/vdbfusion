@@ -234,7 +234,6 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
 void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
     // Render image and save as pfm
     std::cout << "\nFrame #" << index << std::endl;
-    const int numIterations = 50; //  what does this do?
     const int width = 691;
     const int height = 256;
 
@@ -259,7 +258,7 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
 
     auto timer_render0 = std::chrono::high_resolution_clock::now();
 
-    runNanoVDB(handle, label_handle, numIterations, width, height, imageBuffer, index, origin_vec);
+    runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec);
 
     auto timer_render1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed2 = timer_render1 - timer_render0;

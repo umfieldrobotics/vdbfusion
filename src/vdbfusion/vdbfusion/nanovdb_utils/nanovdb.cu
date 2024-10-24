@@ -10,6 +10,8 @@
 #include <nanovdb/util/HDDA.h>
 #include <nanovdb/util/GridBuilder.h>
 
+#include <opencv2/opencv.hpp>
+
 #include "common.h"
 
 #if defined(NANOVDB_USE_CUDA)
@@ -18,7 +20,7 @@ using BufferT = nanovdb::CudaDeviceBuffer;
 using BufferT = nanovdb::HostBuffer;
 #endif
 
-void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<BufferT>& label_handle, int numIterations, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin)
+void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<BufferT>& label_handle, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin)
 { 
     using GridT = nanovdb::FloatGrid;
     using LabelGridT = nanovdb::UInt32Grid;
@@ -101,6 +103,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
     };
 
 #if defined(NANOVDB_USE_CUDA)
+    auto t5 = std::chrono::high_resolution_clock::now();
     handle.deviceUpload();
     label_handle.deviceUpload();
 
@@ -114,44 +117,81 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
     imageBuffer.deviceUpload();
     float* d_outImage = reinterpret_cast<float*>(imageBuffer.deviceData());
 
+    auto t6 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed5 = t6 - t5;
+    std::cout << "Device Upload took: " << elapsed5.count() << " ms" << std::endl;
+
     {
-        float durationAvg = 0;
-        for (int i = 0; i < numIterations; ++i) {
-            float duration = renderImage(true, renderOp, width, height, d_outImage, d_grid, d_label_grid);
-            durationAvg += duration;
-        }
-        durationAvg /= numIterations;
-        std::cout << "Average Duration(NanoVDB-Cuda) = " << durationAvg << " ms" << std::endl;
+        float duration = renderImage(true, renderOp, width, height, d_outImage, d_grid, d_label_grid);
+        std::cout << "Duration(NanoVDB-Cuda) = " << duration << " ms" << std::endl;
+
+        auto start3 = std::chrono::high_resolution_clock::now();
 
         imageBuffer.deviceDownload();
 
-        auto start3 = std::chrono::high_resolution_clock::now();
-        std::ostringstream filename;
-        filename << "out/pfms/" << "loop_output" << index << ".pfm";
+        // std::ostringstream filename;
+        // filename << "examples/python/out/pfms/" << "loop_output" << index << ".pfm";
 
-        saveImage(filename.str(), width, height, (float*)imageBuffer.data());
+        // Create a cv::Mat of size height x width with 3 channels (CV_32FC3) for storing the image.
+        cv::Mat mat(height, width, CV_32FC3);
+
+        auto image = (float*)imageBuffer.data();
+
+        // Populate the cv::Mat with the image data
+        for (int i = 0; i < width * height; ++i) {
+            int y = height - 1 - (i / width);  // Flip the row index (invert y-axis)
+            int x = i % width;
+
+            mat.at<cv::Vec3f>(y, x)[0] = image[2 * width * height + i];  // Blue channel
+            mat.at<cv::Vec3f>(y, x)[1] = image[width * height + i];      // Green channel
+            mat.at<cv::Vec3f>(y, x)[2] = image[i];                       // Red channel
+        }
+
+        mat.convertTo(mat, CV_8UC3, 255);
+
+        cv::imshow("Image", mat);
+        cv::waitKey(1);
+
+        // saveImage(filename.str(), width, height, (float*)imageBuffer.data());
+
         auto end3 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
-        std::cout << "Saving the image took: " << elapsed3.count() << " ms" << std::endl;
+        std::cout << "Buffer download and displaying the image took: " << elapsed3.count() << " ms" << std::endl;
     }
 #else
     {   
+        float duration = renderImage(false, renderOp, width, height, h_outImage, h_grid, h_label_grid);
+        std::cout << "Duration(NanoVDB-Host) = " << duration << " ms" << std::endl;
+
+        // std::ostringstream filename;
+        // filename << "examples/python/out/pfms/" << "loop_output" << index << ".pfm";
+        // saveImage(filename.str(), width, height, (float*)imageBuffer.data());
+
         auto start3 = std::chrono::high_resolution_clock::now();
-        float durationAvg = 0;
-        for (int i = 0; i < numIterations; ++i) {
-            float duration = renderImage(false, renderOp, width, height, h_outImage, h_grid, h_label_grid);
-            durationAvg += duration;
+
+        // Create a cv::Mat of size height x width with 3 channels (CV_32FC3) for storing the image.
+        cv::Mat mat(height, width, CV_32FC3);
+
+        auto image = (float*)imageBuffer.data();
+
+        // Populate the cv::Mat with the image data
+        for (int i = 0; i < width * height; ++i) {
+            int y = height - 1 - (i / width);  // Flip the row index (invert y-axis)
+            int x = i % width;
+
+            mat.at<cv::Vec3f>(y, x)[0] = image[2 * width * height + i];  // Blue channel
+            mat.at<cv::Vec3f>(y, x)[1] = image[width * height + i];      // Green channel
+            mat.at<cv::Vec3f>(y, x)[2] = image[i];                       // Red channel
         }
-        durationAvg /= numIterations;
-        std::cout << "Average Duration(NanoVDB-Host) = " << durationAvg << " ms" << std::endl;
 
-        std::ostringstream filename;
-        filename << "out/pfms/" << "loop_output" << index << ".pfm";
+        mat.convertTo(mat, CV_8UC3, 255);
 
-        saveImage(filename.str(), width, height, (float*)imageBuffer.data());
+        cv::imshow("Image", mat);
+        cv::waitKey(1);
+
         auto end3 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
-        std::cout << "Saving the image took: " << elapsed3.count() << " ms" << std::endl;
+        std::cout << "Displaying the image took: " << elapsed3.count() << " ms" << std::endl;
 
     }
 #endif
