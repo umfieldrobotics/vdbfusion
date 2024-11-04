@@ -59,7 +59,7 @@ set_target_properties(vdbfusion PROPERTIES PUBLIC_HEADER "VDBVolume.h")
 target_include_directories(
   vdbfusion PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
                                                        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(vdbfusion PUBLIC Eigen3::Eigen OpenVDB::openvdb cuda_lib ${OpenCV_LIBS})
+target_link_libraries(vdbfusion PUBLIC Eigen3::Eigen cuda_lib OpenVDB::openvdb ${OpenCV_LIBS})
 
 # NOTE: Installation is still work in progress, therefore we only support dev machines with all the 3rdparty
 # dependencies locally installed

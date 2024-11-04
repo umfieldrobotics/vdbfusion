@@ -5,7 +5,7 @@
 #include <chrono>
 
 #include <nanovdb/util/IO.h>
-#include <nanovdb/util/CudaDeviceBuffer.h>
+#include <nanovdb/util/cuda/CudaDeviceBuffer.h>
 #include <nanovdb/util/Ray.h>
 #include <nanovdb/util/HDDA.h>
 #include <nanovdb/util/GridBuilder.h>
@@ -26,8 +26,8 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
     using LabelGridT = nanovdb::UInt32Grid;
     using CoordT = nanovdb::Coord;
     using RealT = float;
-    using Vec3T = nanovdb::Vec3<RealT>;
-    using RayT = nanovdb::Ray<RealT>;
+    using Vec3T = nanovdb::Vec3f;
+    using RayT = nanovdb::math::Ray<RealT>;
 
     double* device_origin;
     cudaMalloc(&device_origin, origin.size() * sizeof(double));
@@ -89,7 +89,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
             CoordT ijk;
             float  v;
 
-            if (nanovdb::ZeroCrossing(iRay, acc, ijk, v, t0)) {
+            if (nanovdb::math::ZeroCrossing(iRay, acc, ijk, v, t0)) {
                 // write distance to surface. (we assume it is a uniform voxel)
                 float wT0 = t0 * float(grid->voxelSize()[0]);
                 auto label = label_acc.getValue(ijk);

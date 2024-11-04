@@ -74,7 +74,7 @@ class VDBFusionPipeline:
             self._tsdf_volume.render(origin, idx)
             toc = time.perf_counter_ns()
             times.append(toc - tic)
-        self._res = {"mesh": self._get_o3d_mesh(self._tsdf_volume, self._config), "times": times}
+        # self._res = {"mesh": self._get_o3d_mesh(self._tsdf_volume, self._config), "times": times}
 
     def _write_vdb(self):
         os.makedirs(self._config.out_dir, exist_ok=True)

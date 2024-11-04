@@ -142,9 +142,9 @@ int main(int argc, char* argv[]) {
     {
         // for semantics, we will save one mesh for each label--28 in total. the label will be associated with the face. TODO discuss this further
         // triangles[0-2] is for map, triangles[3] is label?
-        timers::ScopeTimer timer("Writing Mesh to disk");
-        auto [vertices, triangles, labels] = // labels belong to triangles
-            tsdf_volume.ExtractTriangleMesh(vdbfusion_cfg.fill_holes_, vdbfusion_cfg.min_weight_);
+        // timers::ScopeTimer timer("Writing Mesh to disk");
+        // auto [vertices, triangles, labels] = // labels belong to triangles
+        //     tsdf_volume.ExtractTriangleMesh(vdbfusion_cfg.fill_holes_, vdbfusion_cfg.min_weight_);
 
         // TODO: Fix this!
         Eigen::MatrixXd V(vertices.size(), 3);

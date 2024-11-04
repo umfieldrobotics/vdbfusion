@@ -20,7 +20,7 @@ def main(
     dataset = Dataset(kitti_root_dir, sequence, config)
     pipeline = Pipeline(dataset, config, f"kitti_{str(sequence).zfill(2)}", jump, n_scans)
     pipeline.run()
-    pipeline.visualize() if visualize else None
+    # pipeline.visualize() if visualize else None
 
 
 if __name__ == "__main__":

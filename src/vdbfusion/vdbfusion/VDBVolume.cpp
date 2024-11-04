@@ -33,9 +33,11 @@
 #include <nanovdb/util/HDDA.h>
 #include <nanovdb/util/IO.h>
 #include <nanovdb/util/Primitives.h>
-#include <nanovdb/util/CudaDeviceBuffer.h>
+#include <nanovdb/util/cuda/CudaDeviceBuffer.h>
 #include <nanovdb/NanoVDB.h>
 #include <nanovdb/util/OpenToNanoVDB.h>
+#include <nanovdb/util/CreateNanoGrid.h>
+#include <nanovdb/tools/GridBuilder.h>
 
 #include <Eigen/Core>
 #include <algorithm>
@@ -66,9 +68,10 @@ float ComputeSDF(const Eigen::Vector3d& origin,
     return static_cast<float>(sign * dist);
 }
 
-Eigen::Vector3d GetVoxelCenter(const openvdb::Coord& voxel, const openvdb::math::Transform& xform) {
+Eigen::Vector3d GetVoxelCenter(const nanovdb::Coord& voxel, const openvdb::math::Transform& xform) {
     const float voxel_size = xform.voxelSize()[0];
-    openvdb::math::Vec3d v_wf = xform.indexToWorld(voxel) + voxel_size / 2.0;
+    openvdb::math::Coord o_voxel = openvdb::math::Coord(voxel.x(), voxel.y(), voxel.z());
+    openvdb::math::Vec3d v_wf = xform.indexToWorld(o_voxel) + voxel_size / 2.0;
     return Eigen::Vector3d(v_wf.x(), v_wf.y(), v_wf.z());
 }
 
@@ -78,29 +81,38 @@ namespace vdbfusion {
 
 VDBVolume::VDBVolume(float voxel_size, float sdf_trunc, bool space_carving /* = false*/)
     : voxel_size_(voxel_size), sdf_trunc_(sdf_trunc), space_carving_(space_carving) {
-    tsdf_ = openvdb::FloatGrid::create(sdf_trunc_);
-    tsdf_->setName("D(x): signed distance grid");
-    tsdf_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
-    tsdf_->setGridClass(openvdb::GRID_LEVEL_SET);
+    
+    auto o_tsdf_ = openvdb::FloatGrid::create(sdf_trunc_); // Create openvdb grid, initialize with voxel size, then convert to nanovdb grid pointer
+    o_tsdf_->setName("D(x): signed distance grid");
+    o_tsdf_->setGridClass(openvdb::GRID_LEVEL_SET);
+    o_tsdf_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
+    auto tsdf_handle_ = nanovdb::tools::createNanoGrid(*o_tsdf_);
+    tsdf_ = tsdf_handle_.grid<float>();
 
-    weights_ = openvdb::FloatGrid::create(0.0f);
-    weights_->setName("W(x): weights grid");
-    weights_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
-    weights_->setGridClass(openvdb::GRID_UNKNOWN);
+    auto o_weights_ = openvdb::FloatGrid::create(0.0f);
+    o_weights_->setName("W(x): weights grid");
+    o_weights_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
+    o_weights_->setGridClass(openvdb::GRID_UNKNOWN);
+    auto weights_handle_ = nanovdb::tools::createNanoGrid(*o_weights_);
+    weights_ = weights_handle_.grid<float>();
 
-    instances_ = openvdb::UInt32Grid::create();
-    instances_->setName("A(x): semantics grid");
-    instances_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
-    instances_->setGridClass(openvdb::GRID_UNKNOWN);
+    auto o_instances_ = openvdb::UInt32Grid::create();
+    o_instances_->setName("A(x): semantics grid");
+    o_instances_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
+    o_instances_->setGridClass(openvdb::GRID_UNKNOWN);
+    auto instances_handle = nanovdb::tools::createNanoGrid(*o_instances_);
+    instances_ = instances_handle.grid<uint32_t>();
 }
 
 void VDBVolume::UpdateTSDF(const float& sdf,
-                           const openvdb::Coord& voxel,
+                           const nanovdb::Coord& voxel,
                            const std::function<float(float)>& weighting_function) {
-    using AccessorRW = openvdb::tree::ValueAccessorRW<openvdb::FloatTree>;
+    // using AccessorRW = nanovdb::tree::ValueAccessorRW<nanovdb::FloatTree>;
     if (sdf > -sdf_trunc_) {
-        AccessorRW tsdf_acc = AccessorRW(tsdf_->tree());
-        AccessorRW weights_acc = AccessorRW(weights_->tree());
+        nanovdb::tools::build::ValueAccessor<float> tsdf_acc(tsdf_->tree().root());
+        nanovdb::tools::build::ValueAccessor<float> weights_acc(weights_->tree().root());
+        // auto tsdf_acc = tsdf_->tree().getAccessor();
+        // auto weights_acc = weights_->tree().getAccessor();
         const float tsdf = std::min(sdf_trunc_, sdf);
         const float weight = weighting_function(sdf);
         const float last_weight = weights_acc.getValue(voxel);
@@ -112,7 +124,7 @@ void VDBVolume::UpdateTSDF(const float& sdf,
     }
 }
 
-void VDBVolume::Integrate(openvdb::FloatGrid::Ptr grid,
+void VDBVolume::Integrate(std::shared_ptr<nanovdb::FloatGrid> grid,
                           const std::function<float(float)>& weighting_function) {
     for (auto iter = grid->cbeginValueOn(); iter.test(); ++iter) {
         const auto& sdf = iter.getValue();
@@ -155,7 +167,7 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
         // Truncate the Ray before and after the source unless space_carving_ is specified.
         const auto depth = static_cast<float>(direction.norm());
         const float t0 = space_carving_ ? 0.0f : depth - sdf_trunc_;
-        const float t1 = depth + sdf_trunc_;
+        const float t = depth + sdf_trunc_;
 
         // Create one DDA per ray(per thread), the ray must operate on voxel grid coordinates.
         const auto ray = openvdb::math::Ray<float>(eye, dir, t0, t1).worldToIndex(*tsdf_);
@@ -245,12 +257,12 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
     std::cout << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
 
     auto timer_nanovdbconv0 = std::chrono::high_resolution_clock::now();
-    openvdb::FloatGrid::Ptr openvdbGrid = tsdf_;
-    openvdb::UInt32Grid::Ptr openvdbGridLabels = instances_;
-    openvdb::CoordBBox bbox;
+    std::shared_ptr<nanovdb::FloatGrid> handle = tsdf_;
+    std::shared_ptr<nanovdb::UInt32Grid> label_handle = instances_;
+    nanovdb::CoordBBox bbox;
 
-    nanovdb::GridHandle<BufferT> handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGrid);
-    nanovdb::GridHandle<BufferT> label_handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGridLabels);
+    // nanovdb::GridHandle<BufferT> handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGrid);
+    // nanovdb::GridHandle<BufferT> label_handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGridLabels);
 
     auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
@@ -265,11 +277,11 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
     std::cout << "NanoVDB rendering took: " << elapsed2.count() << " ms" << std::endl;
 }
 
-openvdb::FloatGrid::Ptr VDBVolume::Prune(float min_weight) const {
+std::shared_ptr<nanovdb::FloatGrid> VDBVolume::Prune(float min_weight) const {
     const auto weights = weights_->tree();
     const auto tsdf = tsdf_->tree();
     const auto background = sdf_trunc_;
-    openvdb::FloatGrid::Ptr clean_tsdf = openvdb::FloatGrid::create(sdf_trunc_);
+    std::shared_ptr<nanovdb::FloatGrid> clean_tsdf = nanovdb::FloatGrid::create(sdf_trunc_);
     clean_tsdf->setName("D(x): Pruned signed distance grid");
     clean_tsdf->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
     clean_tsdf->setGridClass(openvdb::GRID_LEVEL_SET);
