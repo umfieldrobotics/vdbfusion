@@ -2,9 +2,10 @@
 
 docker run -it \
     -e HOME \
-    -v /home/yuzhen/Desktop/semanticVDB:/home/yuzhen/Desktop/semanticVDB \
-    -v /usr/local/lib/cmake/OpenVDB:/usr/local/lib/cmake/OpenVDB \
-    -v /usr/local/lib/cmake/VDBFusion:/usr/local/lib/cmake/VDBFusion \
+    -v $HOME:/home/anjashep-frog-lab \
+    -v /usr/local/lib/cmake:/usr/local/lib/cmake \
+    -v /usr/local/include/openvdb:/usr/local/include/openvdb \
+    -v /usr/local/include/nanovdb:/usr/local/include/nanovdb \
     --name vdbfusion_docker \
     --gpus all \
     vdbfusion_docker # TODO: change this image name, container name and home directory accordingly

@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
     // Initialize dataset 
     const auto dataset =
         datasets::KITTIDataset(kitti_root_dir, sequence, n_scans, kitti_cfg.apply_pose_,
-                               kitti_cfg.preprocess_, kitti_cfg.min_range_, kitti_cfg.max_range_);
+                               kitti_cfg.preprocess_, kitti_cfg.min_range_, kitti_cfg.max_range_, kitti_cfg.rgbd_);
 
     fmt::print("Integrating {} scans\n", dataset.size());
     vdbfusion::VDBVolume tsdf_volume(vdbfusion_cfg.voxel_size_, vdbfusion_cfg.sdf_trunc_,
@@ -120,7 +120,7 @@ int main(int argc, char* argv[]) {
         timer.toc();
 
         timer.tic();
-        std::vector<double> origin_vec = {origin(0), origin(1), origin(2)}; 
+        std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
         tsdf_volume.Render(origin_vec, index);
         index++;
         timer.toc();

@@ -33,9 +33,8 @@
 #include <nanovdb/util/HDDA.h>
 #include <nanovdb/util/IO.h>
 #include <nanovdb/util/Primitives.h>
-#include <nanovdb/util/CudaDeviceBuffer.h>
+#include <nanovdb/util/cuda/CudaDeviceBuffer.h>
 #include <nanovdb/NanoVDB.h>
-#include <nanovdb/util/OpenToNanoVDB.h>
 
 #include <Eigen/Core>
 #include <algorithm>
@@ -245,12 +244,10 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
     std::cout << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
 
     auto timer_nanovdbconv0 = std::chrono::high_resolution_clock::now();
-    openvdb::FloatGrid::Ptr openvdbGrid = tsdf_;
-    openvdb::UInt32Grid::Ptr openvdbGridLabels = instances_;
     openvdb::CoordBBox bbox;
 
-    nanovdb::GridHandle<BufferT> handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGrid);
-    nanovdb::GridHandle<BufferT> label_handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGridLabels);
+    nanovdb::GridHandle<BufferT> handle = nanovdb::tools::createNanoGrid(*tsdf_);
+    nanovdb::GridHandle<BufferT> label_handle = nanovdb::tools::createNanoGrid(*instances_);
 
     auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
