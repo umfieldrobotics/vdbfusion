@@ -31,6 +31,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install essentials
 RUN apt-get update && apt-get install --no-install-recommends -y \
     build-essential \
+    software-properties-common \
     ccache \
     clang-format \
     git \
@@ -41,6 +42,12 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     libtiff-dev \
     libfontconfig1-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install gcc 11
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y
+RUN apt-get update && apt-get install -y gcc-11 g++-11
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
+    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
 
 # Install cmake
 RUN mkdir ~/temp
@@ -53,6 +60,7 @@ RUN rm -rf temp
 # Install Python apt dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
     python3 \
+    python3-dev \
     python3-numpy \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
@@ -70,17 +78,30 @@ RUN pip3 install --upgrade \
 # Install C++ Dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
     libblosc-dev \
-    libboost-iostreams-dev \
-    libboost-numpy-dev \
-    libboost-python-dev \
-    libboost-system-dev \
     libeigen3-dev \
-    libtbb-dev \
     libc++-dev \
     libglu1-mesa-dev \
     python-dev \
     python-numpy \
     && rm -rf /var/lib/apt/lists/*
+
+# Install boost 1.73
+RUN wget https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz
+RUN tar -xf boost_1_80_0.tar.gz
+RUN cd boost_1_80_0 && \
+    ./bootstrap.sh && \
+    ./b2 && \
+    ./b2 install
+
+# Install tbb 2022.0.0
+RUN wget https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2022.0.0.tar.gz
+RUN tar -xvzf v2022.0.0.tar.gz
+RUN cd oneTBB-2022.0.0 && \
+    mkdir build && \
+    cd build && \
+    cmake .. && \
+    make && \
+    make -j4 install
 
 # Install opencv
 WORKDIR /
@@ -101,6 +122,8 @@ RUN mkdir build && \
     make -j6 && \
     make install
 
+RUN apt install libjemalloc-dev -y
+
 RUN useradd -m docker && echo "docker:docker" | chpasswd && adduser docker sudo
 
 ENV TERM xterm-256color
@@ -109,4 +132,3 @@ CMD ["bash", "-l"]
 USER docker
 RUN export PATH="/usr/local/cuda/bin:PATH"
 CMD /bin/bash
-

@@ -23,6 +23,7 @@
 cmake_minimum_required(VERSION 3.18)
 project(VDBFusion VERSION 0.1.6 LANGUAGES CXX)
 
+find_package(OpenCV REQUIRED)
 find_package(CUDA)
 
 # Include nanovdb common.h
@@ -49,6 +50,8 @@ if(NOT TARGET Eigen3::Eigen OR NOT TARGET OpenVDB::openvdb)
   find_package(OpenVDB REQUIRED)
 endif()
 
+include_directories( ${OpenCV_INCLUDE_DIRS} )
+
 target_sources(vdbfusion PRIVATE MarchingCubes.cpp VDBVolume.cpp)
 target_compile_features(vdbfusion PUBLIC cxx_std_11)
 target_compile_options(vdbfusion PRIVATE -Wall -Wextra)
@@ -56,7 +59,7 @@ set_target_properties(vdbfusion PROPERTIES PUBLIC_HEADER "VDBVolume.h")
 target_include_directories(
   vdbfusion PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
                                                        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(vdbfusion PUBLIC Eigen3::Eigen OpenVDB::openvdb cuda_lib)
+target_link_libraries(vdbfusion PUBLIC Eigen3::Eigen OpenVDB::openvdb cuda_lib ${OpenCV_LIBS})
 
 # NOTE: Installation is still work in progress, therefore we only support dev machines with all the 3rdparty
 # dependencies locally installed

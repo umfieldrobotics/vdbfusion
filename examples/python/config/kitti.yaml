@@ -33,5 +33,11 @@ min_weight: 5.0
 # Kitti
 apply_pose: True
 min_range: 2.5
-max_range: 120.0
-correct_scan: True
+max_range: 30.0
+correct_scan: False
+rgbd: False
+pointcloud: True
+fx: 718.856
+fy: 718.856
+cx: 607.1928
+cy: 185.2157

@@ -33,9 +33,8 @@
 #include <nanovdb/util/HDDA.h>
 #include <nanovdb/util/IO.h>
 #include <nanovdb/util/Primitives.h>
-#include <nanovdb/util/CudaDeviceBuffer.h>
+#include <nanovdb/util/cuda/CudaDeviceBuffer.h>
 #include <nanovdb/NanoVDB.h>
-#include <nanovdb/util/OpenToNanoVDB.h>
 
 #include <Eigen/Core>
 #include <algorithm>
@@ -234,7 +233,6 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
 void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
     // Render image and save as pfm
     std::cout << "\nFrame #" << index << std::endl;
-    const int numIterations = 50; //  what does this do?
     const int width = 691;
     const int height = 256;
 
@@ -246,12 +244,10 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
     std::cout << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
 
     auto timer_nanovdbconv0 = std::chrono::high_resolution_clock::now();
-    openvdb::FloatGrid::Ptr openvdbGrid = tsdf_;
-    openvdb::UInt32Grid::Ptr openvdbGridLabels = instances_;
     openvdb::CoordBBox bbox;
 
-    nanovdb::GridHandle<BufferT> handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGrid);
-    nanovdb::GridHandle<BufferT> label_handle = nanovdb::openToNanoVDB<BufferT>(*openvdbGridLabels);
+    nanovdb::GridHandle<BufferT> handle = nanovdb::tools::createNanoGrid(*tsdf_);
+    nanovdb::GridHandle<BufferT> label_handle = nanovdb::tools::createNanoGrid(*instances_);
 
     auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
@@ -259,7 +255,7 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
 
     auto timer_render0 = std::chrono::high_resolution_clock::now();
 
-    runNanoVDB(handle, label_handle, numIterations, width, height, imageBuffer, index, origin_vec);
+    runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec);
 
     auto timer_render1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed2 = timer_render1 - timer_render0;

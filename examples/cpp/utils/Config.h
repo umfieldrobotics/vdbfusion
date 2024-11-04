@@ -55,6 +55,7 @@ struct KITTIConfig {
     bool preprocess_;
     float min_range_;
     float max_range_;
+    bool rgbd_;
 
     static inline KITTIConfig LoadFromYAML(const std::string& path) {
         std::ifstream config_file(path, std::ios_base::in);
@@ -63,7 +64,8 @@ struct KITTIConfig {
         return KITTIConfig{config["apply_pose"].as<bool>(),  //
                            config["preprocess"].as<bool>(),  //
                            config["min_range"].as<float>(),  //
-                           config["max_range"].as<float>()};
+                           config["max_range"].as<float>(),
+                           config["rgbd"].as<bool>()};
     }
 };
 }  // namespace datasets

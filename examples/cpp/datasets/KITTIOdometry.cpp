@@ -137,7 +137,7 @@ std::vector<Eigen::Vector3d> ReadKITTIVelodyne(const std::string& path) {
     return points; // returned in metric Velodyne coordinate frame
 }
 
-std::tuple<std::vector<Eigen::Vector3d>, std::vector<int>> ReadKITTIDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file) {
+std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadKITTIDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file) {
     // Read tiff
     cv::Mat depth_mat = cv::imread(depth_path, cv::IMREAD_UNCHANGED);
 
@@ -163,7 +163,7 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<int>> ReadKITTIDepthAndLabe
     float cy = 185.2157;
 
     std::vector<Eigen::Vector3d> pc_points; // store the 3D points for creating the pointcloud
-    std::vector<int> labels; // store the labels that aren't tossed
+    std::vector<uint32_t> labels; // store the labels that aren't tossed
 
     int num_rows = depth_mat.size().height;
     int num_cols = depth_mat.size().width;
@@ -186,6 +186,7 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<int>> ReadKITTIDepthAndLabe
         }
     }
 
+    // TODO: delete most of this???
     open3d::geometry::PointCloud pc = open3d::geometry::PointCloud(pc_points);
 
     Eigen::Matrix4d T_cam_velo = Eigen::Matrix4d::Zero();
@@ -273,7 +274,7 @@ void TransformPoints(std::vector<Eigen::Vector3d>& points, const Eigen::Matrix4d
     }
 }
 
-std::vector<Eigen::Matrix4d> GetGTPoses(const fs::path& poses_file, const fs::path& calib_file) {
+std::vector<Eigen::Matrix4d> GetGTPoses(const fs::path& poses_file, const fs::path& calib_file, const bool rgbd_) {
     std::vector<Eigen::Matrix4d> poses;
     Eigen::Matrix4d T_cam_velo = Eigen::Matrix4d::Zero();
     Eigen::Matrix4d T_velo_cam = Eigen::Matrix4d::Zero();
@@ -309,8 +310,12 @@ std::vector<Eigen::Matrix4d> GetGTPoses(const fs::path& poses_file, const fs::pa
              P_10, P_11, P_12, P_13,
              P_20, P_21, P_22, P_23,
              0.00, 0.00, 0.00, 1.00;
-        // poses.emplace_back(T_velo_cam * P); // IF FROM DEPTH
-        poses.emplace_back(T_velo_cam * P * T_cam_velo); // IF FROM VELODYNE
+        if (rgbd_) {
+            poses.emplace_back(T_velo_cam * P); // IF FROM DEPTH
+        }
+        else {
+            poses.emplace_back(T_velo_cam * P * T_cam_velo); // IF FROM VELODYNE
+        }
     }
     // clang-format on
     return poses; // in velodyne coordinate frame
@@ -321,14 +326,16 @@ namespace datasets {
 
 KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
                            const std::string& sequence,
-                           int n_scans) {
+                           int n_scans,
+                           bool rgbd) {
+    rgbd_ = rgbd;
     // TODO: to be completed
     auto kitti_root_dir_ = fs::absolute(fs::path(kitti_root_dir));
     auto kitti_sequence_dir = fs::absolute(fs::path(kitti_root_dir) / "sequences" / sequence);
 
     // Read data, cache it inside the class.
     poses_ = GetGTPoses(kitti_root_dir_ / "poses" / std::string(sequence + ".txt"),
-                        kitti_sequence_dir / "calib.txt");
+                        kitti_sequence_dir / "calib.txt", rgbd_);
     scan_files_ = GetVelodyneFiles(fs::absolute(kitti_sequence_dir / "velodyne/"), n_scans);
 }
 
@@ -338,31 +345,46 @@ KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
                            bool apply_pose,
                            bool preprocess,
                            float min_range,
-                           float max_range)
+                           float max_range,
+                           bool rgbd)
     : apply_pose_(apply_pose),
       preprocess_(preprocess),
       min_range_(min_range),
-      max_range_(max_range) {
+      max_range_(max_range),
+      rgbd_(rgbd) {
     auto kitti_root_dir_ = fs::absolute(fs::path(kitti_root_dir));
     auto kitti_sequence_dir = fs::absolute(fs::path(kitti_root_dir) / "sequences" / sequence);
 
     // Read data, cache it inside the class.
     poses_ = GetGTPoses(kitti_root_dir_ / "poses" / std::string(sequence + ".txt"),
-                        kitti_sequence_dir / "calib.txt");
-    scan_files_ = GetVelodyneFiles(fs::absolute(kitti_sequence_dir / "velodyne/"), n_scans);
-    depth_files_ = GetDepthFiles(fs::absolute(kitti_sequence_dir / "depth_tif/"), n_scans);
-    gt_label_files_ = GetGTLabelFiles(fs::absolute(kitti_sequence_dir / "labels_txt/"), n_scans);
-    // label_files_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "image_2_labels/"), n_scans);
+                        kitti_sequence_dir / "calib.txt", rgbd_);
+    if(rgbd_) {
+        depth_files_ = GetDepthFiles(fs::absolute(kitti_sequence_dir / "depth_tif/"), n_scans);
+        label_files_ = GetLabelFiles(fs::absolute(kitti_sequence_dir / "image_2_labels/"), n_scans);
+    }
+    else {
+        scan_files_ = GetVelodyneFiles(fs::absolute(kitti_sequence_dir / "velodyne/"), n_scans);
+        gt_label_files_ = GetGTLabelFiles(fs::absolute(kitti_sequence_dir / "labels_txt/"), n_scans);
+    }
 }
 
 std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Vector3d> KITTIDataset::operator[](int idx) const {
-    std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
-    // auto [points, semantics] = ReadKITTIDepthAndLabels(depth_files_[idx], label_files_[idx], "/home/anjashep-frog-lab/Research/vdbfusion_mapping/vdbfusion/examples/notebooks/semantic-kitti-odometry/dataset/sequences/00/calib.txt");
-    std::vector<uint32_t> semantics = ReadKITTIGroundTruthLabels(gt_label_files_[idx]);
+    if (rgbd_) {
+        auto [points, semantics] = ReadKITTIDepthAndLabels(depth_files_[idx], label_files_[idx], "/home/anjashep-frog-lab/Research/vdbfusion_mapping/vdbfusion/examples/notebooks/semantic-kitti-odometry/dataset/sequences/00/calib.txt");
 
-    if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
-    if (apply_pose_) TransformPoints(points, poses_[idx]);
-    const Eigen::Vector3d origin = poses_[idx].block<3, 1>(0, 3);
-    return std::make_tuple(points, semantics, origin);
+        if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
+        if (apply_pose_) TransformPoints(points, poses_[idx]);
+        const Eigen::Vector3d origin = poses_[idx].block<3, 1>(0, 3);
+        return std::make_tuple(points, semantics, origin);
+    }
+    else {
+        std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
+        std::vector<uint32_t> semantics = ReadKITTIGroundTruthLabels(gt_label_files_[idx]);
+
+        if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
+        if (apply_pose_) TransformPoints(points, poses_[idx]);
+        const Eigen::Vector3d origin = poses_[idx].block<3, 1>(0, 3);
+        return std::make_tuple(points, semantics, origin);
+    }
 }
 }  // namespace datasets

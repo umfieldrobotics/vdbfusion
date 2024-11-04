@@ -37,7 +37,8 @@ public:
 
     explicit KITTIDataset(const std::string& kitti_root_dir,
                           const std::string& sequence,
-                          int n_scans = -1);
+                          int n_scans = -1,
+                          bool rgbd = false);
 
     explicit KITTIDataset(const std::string& kitti_root_dir,
                           const std::string& sequence,
@@ -45,7 +46,8 @@ public:
                           bool apply_pose = true,
                           bool preprocess = true,
                           float min_range = 0.0F,
-                          float max_range = std::numeric_limits<float>::max());
+                          float max_range = std::numeric_limits<float>::max(),
+                          bool rgbd = false);
 
     /// Returns a point cloud and the origin of the sensor in world coordinate frames
     [[nodiscard]] std::tuple<PointCloud, std::vector<uint32_t>, Point> operator[](int idx) const;
@@ -56,6 +58,7 @@ public:
     bool preprocess_ = true;
     float min_range_ = 0.0F;
     float max_range_ = std::numeric_limits<float>::max();
+    bool rgbd_ = false;
 
 private:
     std::vector<std::string> scan_files_;
