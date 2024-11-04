@@ -5,7 +5,7 @@
 import sys
 sys.path.append('../muggled_sam')
 try:
-    import lib  # NOQA
+    import muggled_sam  # NOQA
 except ModuleNotFoundError:
     import os
 
@@ -19,8 +19,8 @@ from collections import defaultdict
 import cv2
 import numpy as np
 import torch
-from lib.make_sam_v2 import make_samv2_from_original_state_dict
-from lib.demo_helpers.video_data_storage import SAM2VideoObjectResults
+from muggled_sam.make_sam_v2 import make_samv2_from_original_state_dict
+from muggled_sam.demo_helpers.video_data_storage import SAM2VideoObjectResults
 
 # Imports for Mask2Former
 from detectron2 import model_zoo
