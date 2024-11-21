@@ -31,17 +31,17 @@
 
 namespace datasets {
 
-class KITTIDataset {
+class SceneNetDataset {
 public:
     using Point = Eigen::Vector3d;
     using PointCloud = std::vector<Eigen::Vector3d>;
 
-    explicit KITTIDataset(const std::string& kitti_root_dir,
+    explicit SceneNetDataset(const std::string& scenenet_root_dir,
                           const std::string& sequence,
                           int n_scans = -1,
                           bool rgbd = false);
 
-    explicit KITTIDataset(const std::string& kitti_root_dir,
+    explicit SceneNetDataset(const std::string& scenenet_root_dir,
                           const std::string& sequence,
                           int n_scans = -1,
                           bool apply_pose = true,
@@ -60,7 +60,7 @@ public:
     float min_range_ = 0.0F;
     float max_range_ = std::numeric_limits<float>::max();
     bool rgbd_ = false;
-    std::filesystem::path kitti_sequence_dir_;
+    std::filesystem::path scenenet_sequence_dir_;
 
 private:
     std::vector<std::string> scan_files_;

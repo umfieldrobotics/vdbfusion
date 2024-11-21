@@ -34,7 +34,7 @@ namespace vdbfusion {
 
 class VDBVolume {
 public:
-    VDBVolume(float voxel_size, float sdf_trunc, bool space_carving = false);
+    VDBVolume(float voxel_size, float sdf_trunc, bool space_carving, int num_semantic_classes);
     ~VDBVolume() = default;
 
 public:
@@ -94,12 +94,14 @@ public:
     /// OpenVDB Grids modeling the signed distance field and the weight grid
     openvdb::FloatGrid::Ptr tsdf_;
     openvdb::FloatGrid::Ptr weights_;
-    openvdb::UInt32Grid::Ptr instances_;
+    openvdb::UInt16Grid::Ptr instances_;
+    std::unordered_map<uint16_t, std::vector<uint16_t>> instance_dirichlet_parameters_; // map of instance number to alpha parameter vector of length # of semantic classes
 
     /// VDBVolume public properties
     float voxel_size_;
     float sdf_trunc_;
     bool space_carving_;
+    int num_semantic_classes_;
 };
 
 }  // namespace vdbfusion

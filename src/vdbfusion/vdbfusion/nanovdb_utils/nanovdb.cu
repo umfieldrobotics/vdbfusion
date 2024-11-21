@@ -1,21 +1,22 @@
 // Copyright Contributors to the OpenVDB Project
 // SPDX-License-Identifier: MPL-2.0
+#define _USE_MATH_DEFINES
 
 #include <cmath>
 #include <chrono>
 
-#include <nanovdb/util/IO.h>
-#include <nanovdb/util/cuda/CudaDeviceBuffer.h>
-#include <nanovdb/util/Ray.h>
-#include <nanovdb/util/HDDA.h>
+#include <nanovdb/io/IO.h>
+#include <nanovdb/math/Ray.h>
+#include <nanovdb/math/HDDA.h>
 #include <nanovdb/util/GridBuilder.h>
-
-#include <opencv2/opencv.hpp>
 
 #include "common.h"
 
+#include <opencv2/opencv.hpp>
+
 #if defined(NANOVDB_USE_CUDA)
-using BufferT = nanovdb::CudaDeviceBuffer;
+#include <nanovdb/cuda/DeviceBuffer.h>
+using BufferT = nanovdb::cuda::DeviceBuffer;
 #else
 using BufferT = nanovdb::HostBuffer;
 #endif
@@ -23,24 +24,28 @@ using BufferT = nanovdb::HostBuffer;
 void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<BufferT>& label_handle, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin)
 { 
     using GridT = nanovdb::FloatGrid;
-    using LabelGridT = nanovdb::UInt32Grid;
+    using LabelGridT = nanovdb::UInt16Grid;
     using CoordT = nanovdb::Coord;
     using RealT = float;
-    using Vec3T = nanovdb::Vec3f;
+    using Vec3T = nanovdb::math::Vec3<RealT>;
     using RayT = nanovdb::math::Ray<RealT>;
 
-    double* device_origin;
-    cudaMalloc(&device_origin, origin.size() * sizeof(double));
-    cudaMemcpy(device_origin, origin.data(), origin.size() * sizeof(double), cudaMemcpyHostToDevice);
-
     auto* h_grid = handle.grid<float>();
-    auto* h_label_grid = label_handle.grid<uint32_t>();
+    auto* h_label_grid = label_handle.grid<uint16_t>();
     if (!h_grid)
         throw std::runtime_error("GridHandle does not contain a valid host grid");
     if (!h_label_grid)
         throw std::runtime_error("GridHandle does not contain a valid host label grid");
 
     float* h_outImage = reinterpret_cast<float*>(imageBuffer.data());
+
+#if defined(NANOVDB_USE_CUDA)
+    double* d_origin;
+    cudaMalloc((void**)&d_origin, 3 * sizeof(double));
+    cudaMemcpy(d_origin, origin.data(), 3 * sizeof(double), cudaMemcpyHostToDevice);
+#else
+    double d_origin[3] = {origin[0], origin[1], origin[2]};
+#endif
 
     float              wBBoxDimZ = (float)h_grid->worldBBox().dim()[2] * 2;
     Vec3T              wBBoxCenter = Vec3T(h_grid->worldBBox().min() + h_grid->worldBBox().dim() * 0.5f);
@@ -52,7 +57,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
     RayGenOp<Vec3T> rayGenOp(wBBoxDimZ, wBBoxCenter);
     CompositeOp     compositeOp;
 
-    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, device_origin] __hostdev__(int start, int end, float* image, const GridT* grid, const LabelGridT* label_grid) {
+    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, d_origin] __hostdev__(int start, int end, float* image, const GridT* grid, const LabelGridT* label_grid) {
         // get an accessor.
         auto acc = grid->tree().getAccessor();
         auto label_acc = label_grid->tree().getAccessor();
@@ -62,28 +67,30 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
             Vec3T rayDir;
             rayGenOp(i, width, height, rayEye, rayDir);
 
-            // change the ray direction from nagative z direction to the positive x direction 
+            // change the ray direction from negative z direction to the positive x direction 
             double rotationMatrix[3][3] = {
                 {0, 0, -1},
                 {-1, 0, 0},
                 {0, 1, 0}
             };
+
             double x = rayDir[0];
             double y = rayDir[1];
             double z = rayDir[2];
             rayDir[0] = rotationMatrix[0][0] * x + rotationMatrix[0][1] * y + rotationMatrix[0][2] * z;
             rayDir[1] = rotationMatrix[1][0] * x + rotationMatrix[1][1] * y + rotationMatrix[1][2] * z;
             rayDir[2] = rotationMatrix[2][0] * x + rotationMatrix[2][1] * y + rotationMatrix[2][2] * z;
- 
-            rayEye[0] = device_origin[0]; 
-            rayEye[1] = device_origin[1]; 
-            rayEye[2] = device_origin[2]; 
+
+            rayEye[0] = d_origin[0];
+            rayEye[1] = d_origin[1];
+            rayEye[2] = d_origin[2];
 
             // generate ray.
             RayT wRay(rayEye, rayDir);
-        
+
             // transform the ray to the grid's index-space.
             RayT iRay = wRay.worldToIndexF(*grid);
+
             // intersect...
             float  t0;
             CoordT ijk;
@@ -108,7 +115,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
     label_handle.deviceUpload();
 
     auto* d_grid = handle.deviceGrid<float>();
-    auto* d_label_grid = label_handle.deviceGrid<uint32_t>();
+    auto* d_label_grid = label_handle.deviceGrid<uint16_t>();
     if (!d_grid)
         throw std::runtime_error("GridHandle does not contain a valid device grid");
     if (!d_label_grid)

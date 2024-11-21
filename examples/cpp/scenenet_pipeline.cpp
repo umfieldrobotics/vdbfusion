@@ -31,7 +31,7 @@
 #include <fstream>
 #include <string>
 
-#include "datasets/KITTIOdometry.h"
+#include "datasets/SceneNetOdometry.h"
 #include "utils/Config.h"
 #include "utils/Iterable.h"
 #include "utils/Timers.h"
@@ -51,13 +51,13 @@ namespace fs = std::filesystem;
 namespace {
 
 argparse::ArgumentParser ArgParse(int argc, char* argv[]) {
-    argparse::ArgumentParser argparser("KITTIPipeline");
-    argparser.add_argument("kitti_root_dir").help("The full path to the KITTI dataset");
+    argparse::ArgumentParser argparser("SceneNetPipeline");
+    argparser.add_argument("scenenet_root_dir").help("The full path to the SceneNet dataset");
     argparser.add_argument("mesh_output_dir").help("Directory to store the resultant mesh");
-    argparser.add_argument("--sequence").help("KITTI Sequence");
+    argparser.add_argument("--sequence").help("SceneNet Sequence");
     argparser.add_argument("--config")
         .help("Dataset specific config file")
-        .default_value<std::string>("config/kitti.yaml")
+        .default_value<std::string>("config/scenenet.yaml")
         .action([](const std::string& value) { return value; });
     argparser.add_argument("--n_scans")
         .help("How many scans to map")
@@ -73,13 +73,13 @@ argparse::ArgumentParser ArgParse(int argc, char* argv[]) {
         exit(0);
     }
 
-    auto kitti_root_dir = argparser.get<std::string>("kitti_root_dir"); 
-    if (!fs::exists(kitti_root_dir)) {
-        std::cerr << kitti_root_dir << "path doesn't exists" << std::endl;
+    auto scenenet_root_dir = argparser.get<std::string>("scenenet_root_dir"); 
+    if (!fs::exists(scenenet_root_dir)) {
+        std::cerr << scenenet_root_dir << "path doesn't exists" << std::endl;
         exit(1);
     }
     
-    std::cout<< " the direction: " << kitti_root_dir << std::endl;
+    std::cout<< " the direction: " << scenenet_root_dir << std::endl;
     return argparser;
 }
 }  // namespace
@@ -93,23 +93,23 @@ int main(int argc, char* argv[]) {
     auto vdbfusion_cfg = 
         vdbfusion::VDBFusionConfig::LoadFromYAML(argparser.get<std::string>("--config")); 
     // Dataset specific configuration
-    auto kitti_cfg = datasets::KITTIConfig::LoadFromYAML(argparser.get<std::string>("--config"));
+    auto scenenet_cfg = datasets::SceneNetConfig::LoadFromYAML(argparser.get<std::string>("--config"));
 
     openvdb::initialize();
 
-    // Kitti stuff
+    // SceneNet stuff
     auto n_scans = argparser.get<int>("--n_scans");
-    auto kitti_root_dir = fs::path(argparser.get<std::string>("kitti_root_dir"));
+    auto scenenet_root_dir = fs::path(argparser.get<std::string>("scenenet_root_dir"));
     auto sequence = argparser.get<std::string>("--sequence"); 
 
     // Initialize dataset 
     const auto dataset =
-        datasets::KITTIDataset(kitti_root_dir, sequence, n_scans, kitti_cfg.apply_pose_,
-                               kitti_cfg.preprocess_, kitti_cfg.min_range_, kitti_cfg.max_range_, kitti_cfg.rgbd_);
+        datasets::SceneNetDataset(scenenet_root_dir, sequence, n_scans, scenenet_cfg.apply_pose_,
+                               scenenet_cfg.preprocess_, scenenet_cfg.min_range_, scenenet_cfg.max_range_, scenenet_cfg.rgbd_);
 
     fmt::print("Integrating {} scans\n", dataset.size());
     vdbfusion::VDBVolume tsdf_volume(vdbfusion_cfg.voxel_size_, vdbfusion_cfg.sdf_trunc_,
-                                     vdbfusion_cfg.space_carving_, vdbfusion_cfg.num_semantic_classes_);
+                                     vdbfusion_cfg.space_carving_);
     timers::FPSTimer<10> timer;
     //modification--------------------------------cuda-------------------------------------------------------
     int index = 0; 
@@ -119,33 +119,23 @@ int main(int argc, char* argv[]) {
         tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; });
         timer.toc();
 
-        // timer.tic();
-        // std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
-        // tsdf_volume.Render(origin_vec, index);
-        // index++;
-        // timer.toc();
+        timer.tic();
+        std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
+        tsdf_volume.Render(origin_vec, index);
+        index++;
+        timer.toc();
     }
 
 
-    // Store the grid results to disks (two .vdb files and one .csv)
-    std::string map_name_tsdf = fmt::format("{out_dir}/kitti_{seq}_{n_scans}_scans",
+    // Store the grid results to disks
+    std::string map_name = fmt::format("{out_dir}/scenenet_{seq}_{n_scans}_scans",
                                        "out_dir"_a = argparser.get<std::string>("mesh_output_dir"),
                                        "seq"_a = sequence, "n_scans"_a = n_scans);
     {
-        timers::ScopeTimer timer1("Writing VDB grid to disk");
+        timers::ScopeTimer timer("Writing VDB grid to disk");
         auto tsdf_grid = tsdf_volume.tsdf_;
-        std::string filename = fmt::format("{map_name}.vdb", "map_name"_a = map_name_tsdf);
+        std::string filename = fmt::format("{map_name}.vdb", "map_name"_a = map_name);
         openvdb::io::File(filename).write({tsdf_grid});
-    }
-
-    std::string map_name_instance = fmt::format("{out_dir}/kitti_{seq}_{n_scans}_instance",
-                                       "out_dir"_a = argparser.get<std::string>("mesh_output_dir"),
-                                       "seq"_a = sequence, "n_scans"_a = n_scans);
-    {
-        timers::ScopeTimer timer2("Writing instance VDB grid to disk");
-        auto instance_grid = tsdf_volume.instances_;
-        std::string filename = fmt::format("{map_name}.vdb", "map_name"_a = map_name_instance);
-        openvdb::io::File(filename).write({instance_grid});
     }
 
     // Run marching cubes and save a .ply file
@@ -180,7 +170,7 @@ int main(int argc, char* argv[]) {
 
         // Now iterate through the map and save each mesh
         for (auto const& [class_label, matrix] : tri_map) {
-            std::string filename = fmt::format("{map_name_tsdf}_{class_label}.ply", fmt::arg("map_name_tsdf", map_name_tsdf), fmt::arg("class_label", class_label));
+            std::string filename = fmt::format("{map_name}_{class_label}.ply", fmt::arg("map_name", map_name), fmt::arg("class_label", class_label));
             // truncate matrix so it's just the number of triangles
             auto num_triangles = tri_map_sizes[class_label];
             Eigen::MatrixXi new_matrix(num_triangles, 3);

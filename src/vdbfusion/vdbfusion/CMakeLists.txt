@@ -34,6 +34,7 @@ include_directories(/home/anjashep-frog-lab/Research/vdbfusion_mapping/vdbfusion
 # Set CUDA compilation flags
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} --extended-lambda")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo")
 
 add_library(vdbfusion STATIC)
 add_library(VDBFusion::vdbfusion ALIAS vdbfusion)
@@ -55,6 +56,7 @@ include_directories( ${OpenCV_INCLUDE_DIRS} )
 target_sources(vdbfusion PRIVATE MarchingCubes.cpp VDBVolume.cpp)
 target_compile_features(vdbfusion PUBLIC cxx_std_11)
 target_compile_options(vdbfusion PRIVATE -Wall -Wextra)
+target_compile_definitions(vdbfusion PRIVATE "NANOVDB_USE_OPENVDB")
 set_target_properties(vdbfusion PROPERTIES PUBLIC_HEADER "VDBVolume.h")
 target_include_directories(
   vdbfusion PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>

@@ -33,6 +33,7 @@ struct VDBFusionConfig {
     float voxel_size_;
     float sdf_trunc_;
     bool space_carving_;
+    int num_semantic_classes_;
     float min_weight_;
     bool fill_holes_;
 
@@ -43,6 +44,7 @@ struct VDBFusionConfig {
         return VDBFusionConfig{config["voxel_size"].as<float>(),    //
                                config["sdf_trunc"].as<float>(),     //
                                config["space_carving"].as<bool>(),  //
+                               config["num_semantic_classes"].as<int>(),  //
                                config["min_weight"].as<float>(),    //
                                config["fill_holes"].as<bool>()};
     }

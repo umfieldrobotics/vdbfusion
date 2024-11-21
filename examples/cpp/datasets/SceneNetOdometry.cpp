@@ -1,6 +1,6 @@
 // MIT License
 //
-// # Copyright (c) 2022 Ignacio Vizzo, Cyrill Stachniss, University of Bonn
+// Copyright (c) 2024 Anja Sheppard, University of Michigan
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "KITTIOdometry.h"
+#include "SceneNetOdometry.h"
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -40,24 +40,6 @@ namespace fs = std::filesystem;
 
 namespace {
 
-std::vector<std::string> GetVelodyneFiles(const fs::path& velodyne_path, int n_scans) {
-    std::vector<std::string> velodyne_files;
-    for (const auto& entry : fs::directory_iterator(velodyne_path)) {
-        if (entry.path().extension() == ".bin") {
-            velodyne_files.emplace_back(entry.path().string());
-        }
-    }
-    if (velodyne_files.empty()) {
-        std::cerr << velodyne_path << "path doesn't have any .bin" << std::endl;
-        exit(1);
-    }
-    std::sort(velodyne_files.begin(), velodyne_files.end());
-    if (n_scans > 0) {
-        velodyne_files.erase(velodyne_files.begin() + n_scans, velodyne_files.end());
-    }
-    return velodyne_files;
-}
-
 std::vector<std::string> GetDepthFiles(const fs::path& depth_path, int n_scans) {
     std::vector<std::string> depth_files;
     for (const auto& entry : fs::directory_iterator(depth_path)) {
@@ -74,24 +56,6 @@ std::vector<std::string> GetDepthFiles(const fs::path& depth_path, int n_scans) 
         depth_files.erase(depth_files.begin() + n_scans, depth_files.end());
     }
     return depth_files;
-}
-
-std::vector<std::string> GetGTLabelFiles(const fs::path& label_path, int n_scans) {
-    std::vector<std::string> label_files;
-    for (const auto& entry : fs::directory_iterator(label_path)) {
-        if (entry.path().extension() == ".txt") {
-            label_files.emplace_back(entry.path().string());
-        }
-    }
-    if (label_files.empty()) {
-        std::cerr << label_path << "path doesn't have any .txt" << std::endl;
-        exit(1);
-    }
-    std::sort(label_files.begin(), label_files.end());
-    if (n_scans > 0) {
-        label_files.erase(label_files.begin() + n_scans, label_files.end());
-    }
-    return label_files;
 }
 
 std::vector<std::string> GetLabelFiles(const fs::path& label_path, int n_scans) {
@@ -112,30 +76,7 @@ std::vector<std::string> GetLabelFiles(const fs::path& label_path, int n_scans) 
     return label_files;
 }
 
-std::vector<Eigen::Vector3d> ReadKITTIVelodyne(const std::string& path) {
-    std::ifstream scan_input(path.c_str(), std::ios::binary);
-    assert(scan_input.is_open() && "ReadPointCloud| not able to open file");
-
-    scan_input.seekg(0, std::ios::end);
-    uint32_t num_points = scan_input.tellg() / (4 * sizeof(float));
-    scan_input.seekg(0, std::ios::beg);
-
-    std::vector<float> values(4 * num_points);
-    scan_input.read((char*)&values[0], 4 * num_points * sizeof(float));
-    scan_input.close();
-
-    std::vector<Eigen::Vector3d> points;
-    points.resize(num_points);
-    for (uint32_t i = 0; i < num_points; i++) {
-        points[i].x() = values[i * 4];
-        points[i].y() = values[i * 4 + 1];
-        points[i].z() = values[i * 4 + 2];
-    }
-
-    return points; // returned in metric Velodyne coordinate frame
-}
-
-std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadKITTIDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file) {
+std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadSceneNetDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file) {
     // Read tiff
     cv::Mat depth_mat = cv::imread(depth_path, cv::IMREAD_UNCHANGED);
 
@@ -150,7 +91,7 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadKITTIDepthAn
 
     for (size_t i = 0; i < depth_mat.size().height; i++) {
         for (size_t j = 0; j < depth_mat.size().width; j++) {
-            depth_data[depth_mat.size().width*i+j] = float(depth_mat.at<double>(i, j, 0));
+            depth_data[depth_mat.size().width*i+j] = float(depth_mat.at<double>(i, j, 0)) / 1000; // SceneNet depth values are in millimeters
             label_data[label_mat.size().width*i+j] = int(label_mat.at<uchar>(i, j));
         }
     }
@@ -215,10 +156,10 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadKITTIDepthAn
     return std::make_tuple(points, labels);
 }
 
-std::vector<uint32_t> ReadKITTIGroundTruthLabels(const std::string& path) {
+std::vector<uint32_t> ReadSceneNetGroundTruthLabels(const std::string& path) {
     // Load semantics info from text file
     std::ifstream infile(path.c_str()); // Open the input file
-    assert(infile.is_open() && "ReadKITTISemantics| not able to open file");
+    assert(infile.is_open() && "ReadSceneNetSemantics| not able to open file");
 
     std::vector<uint32_t> labels; // Vector to store uint32_t numbers
     std::string line;
@@ -322,22 +263,22 @@ std::vector<Eigen::Matrix4d> GetGTPoses(const fs::path& poses_file, const fs::pa
 }  // namespace 
 namespace datasets {
 
-KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
+SceneNetDataset::SceneNetDataset(const std::string& scenenet_root_dir,
                            const std::string& sequence,
                            int n_scans,
                            bool rgbd) {
     rgbd_ = rgbd;
     // TODO: to be completed
-    auto kitti_root_dir_ = fs::absolute(fs::path(kitti_root_dir));
-    auto kitti_sequence_dir = fs::absolute(fs::path(kitti_root_dir) / "sequences" / sequence);
+    auto scenenet_root_dir_ = fs::absolute(fs::path(scenenet_root_dir));
+    auto scenenet_sequence_dir = fs::absolute(fs::path(scenenet_root_dir) / "sequences" / sequence);
 
     // Read data, cache it inside the class.
-    poses_ = GetGTPoses(kitti_root_dir_ / "poses" / std::string(sequence + ".txt"),
-                        kitti_sequence_dir / "calib.txt", rgbd_);
-    scan_files_ = GetVelodyneFiles(fs::absolute(kitti_sequence_dir / "velodyne/"), n_scans);
+    poses_ = GetGTPoses(scenenet_root_dir_ / "poses" / std::string(sequence + ".txt"),
+                        scenenet_sequence_dir / "calib.txt", rgbd_);
+    scan_files_ = GetVelodyneFiles(fs::absolute(scenenet_sequence_dir / "velodyne/"), n_scans);
 }
 
-KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
+SceneNetDataset::SceneNetDataset(const std::string& scenenet_root_dir_,
                            const std::string& sequence,
                            int n_scans,
                            bool apply_pose,
@@ -350,25 +291,24 @@ KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
       min_range_(min_range),
       max_range_(max_range),
       rgbd_(rgbd) {
-    auto kitti_root_dir_ = fs::absolute(fs::path(kitti_root_dir));
-    kitti_sequence_dir_ = fs::absolute(fs::path(kitti_root_dir) / "sequences" / sequence);
+    auto scenenet_root_dir_ = fs::absolute(fs::path(scenenet_root_dir_));
+    scenenet_sequence_dir_ = fs::absolute(fs::path(scenenet_root_dir_) / "sequences" / sequence);
 
     // Read data, cache it inside the class.
-    poses_ = GetGTPoses(kitti_root_dir_ / "poses" / std::string(sequence + ".txt"),
-                        kitti_sequence_dir_ / "calib.txt", rgbd_);
+    poses_ = GetGTPoses(scenenet_root_dir_ / "poses" / std::string(sequence + ".txt"),
+                        scenenet_sequence_dir_ / "calib.txt", rgbd_);
     if(rgbd_) {
-        depth_files_ = GetDepthFiles(fs::absolute(kitti_sequence_dir_ / "depth_tif/"), n_scans);
-        label_files_ = GetLabelFiles(fs::absolute(kitti_sequence_dir_ / "image_2_labels/"), n_scans);
+        depth_files_ = GetDepthFiles(fs::absolute(scenenet_sequence_dir_ / "depth_tif/"), n_scans);
+        label_files_ = GetLabelFiles(fs::absolute(scenenet_sequence_dir_ / "image_2_labels/"), n_scans);
     }
     else {
-        scan_files_ = GetVelodyneFiles(fs::absolute(kitti_sequence_dir_ / "velodyne/"), n_scans);
-        gt_label_files_ = GetGTLabelFiles(fs::absolute(kitti_sequence_dir_ / "labels_txt/"), n_scans);
+        std::cout << "ERROR: There are no pointclouds for SceneNet. Please make sure that the rgbd option in the .yaml file is set to True." << std::endl;
     }
 }
 
-std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Vector3d> KITTIDataset::operator[](int idx) const {
+std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Vector3d> SceneNetDataset::operator[](int idx) const {
     if (rgbd_) {
-        auto [points, semantics] = ReadKITTIDepthAndLabels(depth_files_[idx], label_files_[idx], fs::absolute(kitti_sequence_dir_ / "calib.txt"));
+        auto [points, semantics] = ReadSceneNetDepthAndLabels(depth_files_[idx], label_files_[idx], fs::absolute(scenenet_sequence_dir_ / "calib.txt"));
 
         // if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
         if (apply_pose_) TransformPoints(points, poses_[idx]);
@@ -376,8 +316,8 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Vector3d>
         return std::make_tuple(points, semantics, origin);
     }
     else {
-        std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
-        std::vector<uint32_t> semantics = ReadKITTIGroundTruthLabels(gt_label_files_[idx]);
+        std::vector<Eigen::Vector3d> points = ReadSceneNetVelodyne(scan_files_[idx]);
+        std::vector<uint32_t> semantics = ReadSceneNetGroundTruthLabels(gt_label_files_[idx]);
 
         if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
         if (apply_pose_) TransformPoints(points, poses_[idx]);

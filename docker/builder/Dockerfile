@@ -103,6 +103,8 @@ RUN cd oneTBB-2022.0.0 && \
     make && \
     make -j4 install
 
+RUN apt-get update && apt-get install -y libjemalloc-dev libgtk2.0-dev
+
 # Install opencv
 WORKDIR /
 RUN apt-get update && apt-get install -y wget git ssh libfreetype6 libfreetype6-dev libharfbuzz-dev
@@ -118,11 +120,10 @@ RUN mkdir build && \
       -D INSTALL_C_EXAMPLES=OFF \
       -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
       -D WITH_FREETYPE=OFF \
+      -D WITH_GTK=ON \
       ../opencv && \
     make -j6 && \
     make install
-
-RUN apt install libjemalloc-dev -y
 
 RUN useradd -m docker && echo "docker:docker" | chpasswd && adduser docker sudo
 
