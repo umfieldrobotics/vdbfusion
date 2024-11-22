@@ -22,7 +22,7 @@ using BufferT = nanovdb::cuda::DeviceBuffer;
 using BufferT = nanovdb::HostBuffer;
 #endif
 
-using LabelGridT = nanovdb::UInt16Grid;
+using LabelGridT = nanovdb::UInt32Grid;
 
 #ifdef __cplusplus
 extern "C" {

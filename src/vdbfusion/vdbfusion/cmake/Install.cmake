@@ -24,7 +24,7 @@ include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
 
 install(
-  TARGETS vdbfusion cuda_lib
+  TARGETS vdbfusion #cuda_lib
   EXPORT ${PROJECT_NAME}Targets
   PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/vdbfusion
   INCLUDES

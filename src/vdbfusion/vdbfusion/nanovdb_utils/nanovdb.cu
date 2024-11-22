@@ -24,7 +24,7 @@ using BufferT = nanovdb::HostBuffer;
 void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<BufferT>& label_handle, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin)
 { 
     using GridT = nanovdb::FloatGrid;
-    using LabelGridT = nanovdb::UInt16Grid;
+    using LabelGridT = nanovdb::UInt32Grid;
     using CoordT = nanovdb::Coord;
     using RealT = float;
     using Vec3T = nanovdb::math::Vec3<RealT>;
