@@ -100,7 +100,9 @@ int main(int argc, char* argv[]) {
     // Kitti stuff
     auto n_scans = argparser.get<int>("--n_scans");
     auto kitti_root_dir = fs::path(argparser.get<std::string>("kitti_root_dir"));
-    auto sequence = argparser.get<std::string>("--sequence"); 
+    auto sequence = argparser.get<std::string>("--sequence");
+
+    const size_t num_semantic_classes = 28; // this MUST be known at compile time
 
     // Initialize dataset 
     const auto dataset =
@@ -109,7 +111,7 @@ int main(int argc, char* argv[]) {
 
     fmt::print("Integrating {} scans\n", dataset.size());
     vdbfusion::VDBVolume tsdf_volume(vdbfusion_cfg.voxel_size_, vdbfusion_cfg.sdf_trunc_,
-                                     vdbfusion_cfg.space_carving_, vdbfusion_cfg.num_semantic_classes_);
+                                     vdbfusion_cfg.space_carving_);
     timers::FPSTimer<10> timer;
     //modification--------------------------------cuda-------------------------------------------------------
     int index = 0; 

@@ -73,8 +73,8 @@ Eigen::Vector3d GetVoxelCenter(const openvdb::Coord& voxel, const openvdb::math:
 
 namespace vdbfusion {
 
-VDBVolume::VDBVolume(float voxel_size, float sdf_trunc, bool space_carving, int num_semantic_classes)
-    : voxel_size_(voxel_size), sdf_trunc_(sdf_trunc), space_carving_(space_carving), num_semantic_classes_(num_semantic_classes) {
+VDBVolume::VDBVolume(float voxel_size, float sdf_trunc, bool space_carving)
+    : voxel_size_(voxel_size), sdf_trunc_(sdf_trunc), space_carving_(space_carving) {
     tsdf_ = openvdb::FloatGrid::create(sdf_trunc_);
     tsdf_->setName("D(x): signed distance grid");
     tsdf_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
@@ -85,7 +85,7 @@ VDBVolume::VDBVolume(float voxel_size, float sdf_trunc, bool space_carving, int 
     weights_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
     weights_->setGridClass(openvdb::GRID_UNKNOWN);
 
-    instances_ = openvdb::Vec28IGrid::create(openvdb::Vec28i());
+    instances_ = openvdb::VecXIGrid<num_semantic_classes_>::create(openvdb::VecXI16<num_semantic_classes_>());
     instances_->setName("A(x): semantics grid");
     instances_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
     instances_->setGridClass(openvdb::GRID_UNKNOWN);

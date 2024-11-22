@@ -24,7 +24,6 @@
 voxel_size: 0.1
 sdf_trunc: 0.3
 space_carving: False
-num_semantic_classes: 28
 
 # Reconstruction
 fill_holes: True

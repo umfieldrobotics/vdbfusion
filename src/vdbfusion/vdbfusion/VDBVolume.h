@@ -34,7 +34,7 @@ namespace vdbfusion {
 
 class VDBVolume {
 public:
-    VDBVolume(float voxel_size, float sdf_trunc, bool space_carving, int num_semantic_classes);
+    VDBVolume(float voxel_size, float sdf_trunc, bool space_carving);
     ~VDBVolume() = default;
 
 public:
@@ -91,17 +91,17 @@ public:
     ExtractTriangleMesh(bool fill_holes = true, float min_weight = 0.5) const;
 
 public:
-    /// OpenVDB Grids modeling the signed distance field and the weight grid
-    openvdb::FloatGrid::Ptr tsdf_;
-    openvdb::FloatGrid::Ptr weights_;
-    openvdb::Vec28IGrid::Ptr instances_;
-    std::unordered_map<uint32_t, std::vector<uint16_t>> panoptic_dirichlet_parameters_; // map of instance number to alpha parameter vector of length # of semantic classes
-
     /// VDBVolume public properties
     float voxel_size_;
     float sdf_trunc_;
     bool space_carving_;
-    int num_semantic_classes_;
+    static constexpr size_t num_semantic_classes_ = 28;  // MUST be defined at compile-time
+
+    /// OpenVDB Grids modeling the signed distance field and the weight grid
+    openvdb::FloatGrid::Ptr tsdf_;
+    openvdb::FloatGrid::Ptr weights_;
+    openvdb::VecXIGrid<num_semantic_classes_>::Ptr instances_;
+    std::unordered_map<uint32_t, std::vector<uint16_t>> panoptic_dirichlet_parameters_; // map of instance number to alpha parameter vector of length # of semantic classes
 };
 
 }  // namespace vdbfusion

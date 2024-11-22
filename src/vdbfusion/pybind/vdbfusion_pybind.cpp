@@ -70,8 +70,8 @@ PYBIND11_MODULE(vdbfusion_pybind, m) {
         "should not be used. Please reffer to the python Procesor class to "
         "check how to use the API");
     vdb_volume
-        .def(py::init<float, float, bool, int>(), "voxel_size"_a, "sdf_trunc"_a,
-             "space_carving"_a, "num_semantic_classes"_a)
+        .def(py::init<float, float, bool>(), "voxel_size"_a, "sdf_trunc"_a,
+             "space_carving"_a)
         // TODO: add support for this
         .def("_integrate",
              py::overload_cast<const std::vector<Eigen::Vector3d>&, const Eigen::Matrix4d&,
