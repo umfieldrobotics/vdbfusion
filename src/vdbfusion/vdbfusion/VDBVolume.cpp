@@ -171,18 +171,22 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
                 auto comb_label = labels[idx];
                 uint16_t semantic_label = (uint16_t)(comb_label & 0xFFFF); // lower 16 bits
                 uint16_t instance_label = (uint16_t)((comb_label >> 16) & 0xFFFF); // upper 16 bits
-                std::cout << semantic_label << " " << instance_label << std::endl;
+                std::string comb;
+                if (instance_label != 0) sprintf(comb, "%03d%03d", instance_label, 0); // if there is an instance label, then don't include semantics in the panoptic label
+                else sprintf(comb, "%03d%03d", instance_label, semantic_label);  // if there is no instance label, then the identifier is the semantic label
+                uint32_t panoptic_label = std::stoi(comb);
+                std::cout << semantic_label << " " << instance_label << " " << panoptic_label << std::endl;
                 tsdf_acc.setValue(voxel, new_tsdf);
                 weights_acc.setValue(voxel, new_weight);
                 labels_acc.setValue(voxel, instance_label);
-                if (instance_dirichlet_parameters_.find(instance_label) == instance_dirichlet_parameters_.end()){
+                if (panoptic_dirichlet_parameters_.find(panoptic_label) == panoptic_dirichlet_parameters_.end()){
                     // instance is not being tracked yet
                     std::vector<uint16_t> alpha(num_semantic_classes_, 0);
-                    instance_dirichlet_parameters_[instance_label] = alpha;
+                    panoptic_dirichlet_parameters_[panoptic_label] = alpha;
                 }
-                instance_dirichlet_parameters_[instance_label][semantic_label] += 1; // update weight of alpha vector
+                panoptic_dirichlet_parameters_[panoptic_label][semantic_label] += 1; // update weight of alpha vector
 
-                std::cout << instance_dirichlet_parameters_[instance_label][semantic_label] << std::endl;
+                std::cout << panoptic_dirichlet_parameters_[instance_label][semantic_label] << std::endl;
             }
         } while (dda.step());
     });

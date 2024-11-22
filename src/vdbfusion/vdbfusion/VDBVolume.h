@@ -94,8 +94,8 @@ public:
     /// OpenVDB Grids modeling the signed distance field and the weight grid
     openvdb::FloatGrid::Ptr tsdf_;
     openvdb::FloatGrid::Ptr weights_;
-    openvdb::UInt16Grid::Ptr instances_;
-    std::unordered_map<uint16_t, std::vector<uint16_t>> instance_dirichlet_parameters_; // map of instance number to alpha parameter vector of length # of semantic classes
+    openvdb::UInt32Grid::Ptr instances_;
+    std::unordered_map<uint32_t, std::vector<uint16_t>> panoptic_dirichlet_parameters_; // map of instance number to alpha parameter vector of length # of semantic classes
 
     /// VDBVolume public properties
     float voxel_size_;
