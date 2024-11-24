@@ -121,11 +121,11 @@ int main(int argc, char* argv[]) {
         tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; });
         timer.toc();
 
-        // timer.tic();
-        // std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
-        // tsdf_volume.Render(origin_vec, index);
-        // index++;
-        // timer.toc();
+        timer.tic();
+        std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
+        tsdf_volume.Render(origin_vec, index);
+        index++;
+        timer.toc();
     }
 
 

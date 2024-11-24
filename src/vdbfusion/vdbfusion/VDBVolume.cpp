@@ -28,13 +28,13 @@
 #include <openvdb/math/Ray.h>
 #include <openvdb/openvdb.h>
 
-// #include "nanovdb_utils/common.h"
-// #include <nanovdb/util/Ray.h>
-// #include <nanovdb/util/HDDA.h>
-// #include <nanovdb/util/IO.h>
-// #include <nanovdb/util/Primitives.h>
-// #include <nanovdb/util/cuda/CudaDeviceBuffer.h>
-// #include <nanovdb/NanoVDB.h>
+#include "nanovdb_utils/common.h"
+#include <nanovdb/util/Ray.h>
+#include <nanovdb/util/HDDA.h>
+#include <nanovdb/util/IO.h>
+#include <nanovdb/util/Primitives.h>
+#include <nanovdb/util/cuda/CudaDeviceBuffer.h>
+#include <nanovdb/NanoVDB.h>
 
 #include <Eigen/Core>
 #include <algorithm>
@@ -44,11 +44,11 @@
 #include <memory>
 #include <vector>
 
-// #if defined(NANOVDB_USE_CUDA)
-// using BufferT = nanovdb::cuda::DeviceBuffer;
-// #else
-// using BufferT = nanovdb::HostBuffer;
-// #endif
+#if defined(NANOVDB_USE_CUDA)
+using BufferT = nanovdb::cuda::DeviceBuffer;
+#else
+using BufferT = nanovdb::HostBuffer;
+#endif
 
 namespace {
 
@@ -168,13 +168,7 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
                 const float last_tsdf = tsdf_acc.getValue(voxel);
                 const float new_weight = weight + last_weight;
                 const float new_tsdf = (last_tsdf * last_weight + tsdf * weight) / (new_weight);
-                // auto comb_label = labels[idx];
                 uint16_t semantic_label = (uint16_t)(labels[idx] & 0xFFFF); // lower 16 bits
-                // uint16_t instance_label = (uint16_t)((comb_label >> 16) & 0xFFFF); // upper 16 bits
-                // std::string comb;
-                // if (instance_label != 0) sprintf(comb, "%03d%03d", instance_label, 0); // if there is an instance label, then don't include semantics in the panoptic label
-                // else sprintf(comb, "%03d%03d", instance_label, semantic_label);  // if there is no instance label, then the identifier is the semantic label
-                // uint32_t panoptic_label = std::stoi(comb);
                 tsdf_acc.setValue(voxel, new_tsdf);
                 weights_acc.setValue(voxel, new_weight);
                 auto label_one_hot = labels_acc.getValue(voxel);
@@ -241,8 +235,8 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
     const int height = 256;
 
     auto timer_imgbuff0 = std::chrono::high_resolution_clock::now();
-    // BufferT imageBuffer;
-    // imageBuffer.init(3 * width * height * sizeof(float)); // needs to be a 3 channel image
+    BufferT imageBuffer;
+    imageBuffer.init(3 * width * height * sizeof(float)); // needs to be a 3 channel image
     auto timer_imgbuff1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed0 = timer_imgbuff1 - timer_imgbuff0;
     std::cout << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
@@ -250,8 +244,8 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
     auto timer_nanovdbconv0 = std::chrono::high_resolution_clock::now();
     openvdb::CoordBBox bbox;
 
-    // auto handle = nanovdb::tools::createNanoGrid<openvdb::FloatGrid, float, BufferT>(*tsdf_);
-    // auto label_handle = nanovdb::tools::createNanoGrid<openvdb::Vec28IGrid, openvdb::Vec28i, BufferT>(*instances_);
+    auto handle = nanovdb::tools::createNanoGrid<openvdb::FloatGrid, float, BufferT>(*tsdf_);
+    auto label_handle = nanovdb::tools::createNanoGrid<openvdb::VecXIGrid<num_semantic_classes_>, openvdb::VecXI16<num_semantic_classes_>, BufferT>(*instances_);
 
     auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
@@ -259,14 +253,14 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
 
     auto timer_render0 = std::chrono::high_resolution_clock::now();
 
-// #if defined(NANOVDB_USE_CUDA)
-//     cudaStream_t stream; // Create a CUDA stream to allow for asynchronous copy of pinned CUDA memory.
-//     cudaStreamCreate(&stream);
-//     handle.deviceUpload(stream, false); // Copy the NanoVDB grid to the GPU asynchronously
-//     runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec);
-// #else
-//     runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec);
-// #endif
+#if defined(NANOVDB_USE_CUDA)
+    cudaStream_t stream; // Create a CUDA stream to allow for asynchronous copy of pinned CUDA memory.
+    cudaStreamCreate(&stream);
+    handle.deviceUpload(stream, false); // Copy the NanoVDB grid to the GPU asynchronously
+    runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec);
+#else
+    runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec);
+#endif
 
     auto timer_render1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed2 = timer_render1 - timer_render0;

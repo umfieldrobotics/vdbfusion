@@ -38,8 +38,8 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo")
 
 add_library(vdbfusion STATIC)
 add_library(VDBFusion::vdbfusion ALIAS vdbfusion)
-#cuda_add_library(cuda_lib STATIC nanovdb_utils/nanovdb.cu)
-#add_library(VDBFusion::cuda_lib ALIAS cuda_lib)
+cuda_add_library(cuda_lib STATIC nanovdb_utils/nanovdb.cu)
+add_library(VDBFusion::cuda_lib ALIAS cuda_lib)
 
 # In case we are building this as a standalone project, we should look here the dependencies
 if(NOT TARGET Eigen3::Eigen OR NOT TARGET OpenVDB::openvdb)
@@ -61,8 +61,7 @@ set_target_properties(vdbfusion PROPERTIES PUBLIC_HEADER "VDBVolume.h")
 target_include_directories(
   vdbfusion PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
                                                        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-#target_link_libraries(vdbfusion PUBLIC Eigen3::Eigen OpenVDB::openvdb cuda_lib ${OpenCV_LIBS})
-target_link_libraries(vdbfusion PUBLIC Eigen3::Eigen OpenVDB::openvdb ${OpenCV_LIBS})
+target_link_libraries(vdbfusion PUBLIC Eigen3::Eigen OpenVDB::openvdb cuda_lib ${OpenCV_LIBS})
 
 # NOTE: Installation is still work in progress, therefore we only support dev machines with all the 3rdparty
 # dependencies locally installed

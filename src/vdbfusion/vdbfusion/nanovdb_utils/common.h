@@ -14,15 +14,14 @@
 #include <nanovdb/util/GridBuilder.h>
 #include "ComputePrimitives.h"
 
-// #define NANOVDB_USE_CUDA
-
 #if defined(NANOVDB_USE_CUDA)
 using BufferT = nanovdb::cuda::DeviceBuffer;
 #else
 using BufferT = nanovdb::HostBuffer;
 #endif
 
-using LabelGridT = nanovdb::UInt32Grid;
+template <int S>
+using LabelGridT = nanovdb::VecXIGrid<S>;
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,8 +64,8 @@ inline __hostdev__ void mortonEncode(uint32_t& code, uint32_t x, uint32_t y)
     code = SeparateBy1(x) | (SeparateBy1(y) << 1);
 }
 
-template<typename RenderFn, typename GridT>
-inline float renderImage(bool useCuda, const RenderFn renderOp, int width, int height, float* image, const GridT* grid, const LabelGridT* label_grid)
+template<int S, typename RenderFn, typename GridT>
+inline float renderImage(bool useCuda, const RenderFn renderOp, int width, int height, float* image, const GridT* grid, const LabelGridT<S>* label_grid)
 {
     using ClockT = std::chrono::high_resolution_clock;
     auto t0 = ClockT::now();
@@ -158,145 +157,67 @@ struct RGB {
 
 struct CompositeOp
 {
-    int semanticColorMap[3*31] = {
-        0, 0, 0,     // 0: Black 0 IS FLAG FOR NO CLASS
-        0, 255, 0,   // 1: Green
-        0, 0, 255,   // 2: Blue
-        255, 255, 0, // 3: Yellow
-        0, 255, 255, // 4: Cyan
-        255, 0, 255, // 5: Magenta
-        192, 192, 192, // 6: Silver
-        128, 128, 128, // 7: Gray
-        128, 0, 0,     // 8: Maroon
-        128, 0, 128,   // 9: Purple
-        128, 128, 0,   // 10: Olive
-        0, 128, 0,     // 11: Dark Green
-        0, 128, 128,   // 12: Teal
-        0, 0, 128,     // 13: Navy
-        255, 165, 0,   // 14: Orange
-        255, 192, 203, // 15: Pink
-        139, 69, 19,   // 16: Brown
-        75, 0, 130,    // 17: Indigo
-        173, 255, 47,  // 18: Green Yellow
-        240, 230, 140, // 19: Khaki
-        255, 105, 180, // 20: Hot Pink
-        72, 209, 204,  // 21: Medium Turquoise
-        240, 128, 128, // 22: Light Coral
-        255, 228, 181, // 23: Moccasin
-        152, 251, 152, // 24: Pale Green
-        135, 206, 250, // 25: Light Sky Blue
-        238, 130, 238, // 26: Violet
-        210, 105, 30,  // 27: Chocolate
-        0, 191, 255,   // 28: Deep Sky Blue
-        255, 250, 205, // 29: Lemon Chiffon
-        124, 228, 0};  // 30: Lawn Green
+    const uint8_t color_map[26][3] = {
+        {  0,   0,   0},    // "unlabeled"
+        {255,   0,   0},    // "outlier"
+        {64,    0, 128},    // "car"
+        {100, 230, 245},    // "bicycle"
+        {100,  80, 250},    // "bus"
+        { 30,  60, 150},    // "motorcycle"
+        {  0,   0, 255},    // "on-rails"
+        { 80,  30, 180},    // "truck"
+        {  0,   0, 255},    // "other-vehicle"
+        {255,  30,  30},    // "person"
+        {255,  40, 200},    // "bicyclist"
+        {150,  30,  90},    // "motorcyclist"
+        {128,  64, 128},    // "road"
+        {255, 150, 255},    // "parking"
+        { 75,   0,  75},    // "sidewalk"
+        {175,   0,  75},    // "other-ground"
+        {128,   0,   0},    // "building"
+        {255, 120,  50},    // "fence"
+        {255, 150,   0},    // "other-structure"
+        {150, 255, 170},    // "lane-marking"
+        {128, 128,   0},    // "vegetation"
+        {135,  60,   0},    // "trunk"
+        {150, 240,  80},    // "terrain"
+        {255, 240, 150},    // "pole"
+        {255,   0,   0},    // "traffic-sign"
+        { 50, 255, 255},    // "other-object"
+    };
 
-    int instanceColorMap[3*44] = {
-        0, 0, 0,
-        255, 255, 0,
-        28, 230, 255,
-        255, 52, 255,
-        255, 74, 70,
-        0, 137, 65,
-        0, 111, 166,
-        163, 0, 89,
-        255, 219, 229,
-        122, 73, 0,
-        0, 0, 166,
-        99, 255, 172,
-        183, 151, 98,
-        0, 77, 67,
-        143, 176, 255,
-        153, 125, 135,
-        90, 0, 7,
-        128, 150, 147,
-        254, 255, 230,
-        27, 68, 0,
-        79, 198, 1,
-        59, 93, 255,
-        74, 59, 83,
-        255, 47, 128,
-        97, 97, 90,
-        186, 9, 0,
-        107, 121, 0,
-        0, 194, 160,
-        255, 170, 146,
-        255, 144, 201,
-        185, 3, 170,
-        209, 97, 0,
-        221, 239, 255,
-        0, 0, 53,
-        123, 79, 75,
-        161, 194, 153,
-        48, 0, 24,
-        10, 166, 216,
-        1, 51, 73,
-        0, 132, 111,
-        55, 33, 1,
-        255, 181, 0,
-        186, 98, 0};
-
-    inline __hostdev__ void operator()(float* outImage, int i, int w, int h, int label, float alpha) const
+    template <int S>
+    inline __hostdev__ void operator()(float* outImage, int i, int w, int h, nanovdb::math::VecXi<S>& alpha, float a) const
     {
 
-        uint32_t x, y;
-        int      offset;
+        int offset;
 #if 0
+        uint32_t x, y;
         mortonDecode(i, x, y);
         offset = x + y * w;
 #else
-        x = i % w;
-        y = i / w;
         offset = i;
 #endif
+        // maximum a posteriori estimation of dirichlet alpha parameters
+        int max_i = 0;
+        for (int i = 0; i < S; i++) {
+            if (alpha[i] > alpha[max_i]) max_i = i;
+        }
 
-        // checkerboard background...
-        const int   mask = 1 << 7;
-        const float bg = ((x & mask) ^ (y & mask)) ? 1.0f : 0.5f;
-
-        // decode label (upper 16 bits are instance label, lower 16 bits are semantic label)
-        uint16_t inst_label = static_cast<uint16_t>(label >> 16);
-        uint16_t sem_label = static_cast<uint16_t>(label & 0xFFFF);
+        auto sem_label = max_i;
 
         RGB color;
 
-#if defined(NANOVDB_USE_CUDA)
-        // int* d_SCM;
-        // cudaMalloc((void**)&d_SCM, 31 * 3 * sizeof(int));
-        // cudaMemcpy(d_SCM, semanticColorMap, 31 * 3 * sizeof(int), cudaMemcpyHostToDevice);
+        // color.r = color_map[(3*(sem_label))];
+        // color.g = color_map[(3*(sem_label))+1];
+        // color.b = color_map[(3*(sem_label))+2];
 
-        // int* d_ICM;
-        // cudaMalloc((void**)&d_ICM, 1024 * 3 * sizeof(int));
-        // cudaMemcpy(d_ICM, instanceColorMap, 1024 * 3 * sizeof(int), cudaMemcpyHostToDevice);
+        color.r = color_map[sem_label][0];
+        color.g = color_map[sem_label][1];
+        color.b = color_map[sem_label][2];
 
-        if (inst_label == 0) { // no instance label, so go off of semantics
-            color.r = semanticColorMap[(3*(sem_label%31))];
-            color.g = semanticColorMap[(3*(sem_label%31))+1];
-            color.b = semanticColorMap[(3*(sem_label%31))+2];
-        }
-        else { // instance label
-            color.r = instanceColorMap[(3*(inst_label%44))];
-            color.b = instanceColorMap[(3*(inst_label%44))+1];
-            color.g = instanceColorMap[(3*(inst_label%44))+2];
-        }
-#else
-        if (inst_label == 0) { // no instance label, so go off of semantics TODO FIX THE MOD
-            color.r = semanticColorMap[((3*sem_label)%31)];
-            color.g = semanticColorMap[((3*sem_label)%31)+1];
-            color.b = semanticColorMap[((3*sem_label)%31)+2];
-        }
-        else { // instance label
-            color.r = instanceColorMap[((3*inst_label)%44)];
-            color.g = instanceColorMap[((3*inst_label)%44)+1];
-            color.b = instanceColorMap[((3*inst_label)%44)+2];
-        }
-#endif
-//         outImage[offset] = alpha * (color.r / 255.0) + (1.0f - alpha) * bg;
-//         outImage[w*h + offset] = alpha * (color.b / 255.0) + (1.0f - alpha) * bg;
-//         outImage[2*w*h + offset] = alpha * (color.g / 255.0) + (1.0f - alpha) * bg;
-
-        outImage[offset] = (color.r / 255.0) + (1.0f - alpha);
-        outImage[w*h + offset] = (color.b / 255.0) + (1.0f - alpha);
-        outImage[2*w*h + offset] = (color.g / 255.0) + (1.0f - alpha);
+        outImage[offset] = (color.r / 255.0) + (1.0f - a);
+        outImage[w*h + offset] = (color.b / 255.0) + (1.0f - a);
+        outImage[2*w*h + offset] = (color.g / 255.0) + (1.0f - a);
     }
 };

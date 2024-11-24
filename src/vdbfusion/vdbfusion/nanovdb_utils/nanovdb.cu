@@ -2,17 +2,16 @@
 // SPDX-License-Identifier: MPL-2.0
 #define _USE_MATH_DEFINES
 
-#include <cmath>
-#include <chrono>
-
 #include <nanovdb/io/IO.h>
-#include <nanovdb/math/Ray.h>
 #include <nanovdb/math/HDDA.h>
+#include <nanovdb/math/Ray.h>
 #include <nanovdb/util/GridBuilder.h>
 
-#include "common.h"
-
+#include <chrono>
+#include <cmath>
 #include <opencv2/opencv.hpp>
+
+#include "common.h"
 
 #if defined(NANOVDB_USE_CUDA)
 #include <nanovdb/cuda/DeviceBuffer.h>
@@ -21,19 +20,24 @@ using BufferT = nanovdb::cuda::DeviceBuffer;
 using BufferT = nanovdb::HostBuffer;
 #endif
 
-void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<BufferT>& label_handle, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin)
-{ 
+void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
+                nanovdb::GridHandle<BufferT>& label_handle,
+                int width,
+                int height,
+                BufferT& imageBuffer,
+                int index,
+                const std::vector<double> origin) {
+    constexpr int num_semantic_classes = 28; // TODO FIX
     using GridT = nanovdb::FloatGrid;
-    using LabelGridT = nanovdb::UInt32Grid;
+    using LabelGridT = nanovdb::VecXIGrid<num_semantic_classes>;
     using CoordT = nanovdb::Coord;
     using RealT = float;
     using Vec3T = nanovdb::math::Vec3<RealT>;
     using RayT = nanovdb::math::Ray<RealT>;
 
     auto* h_grid = handle.grid<float>();
-    auto* h_label_grid = label_handle.grid<uint16_t>();
-    if (!h_grid)
-        throw std::runtime_error("GridHandle does not contain a valid host grid");
+    auto* h_label_grid = label_handle.grid<nanovdb::math::VecXi<num_semantic_classes>>();
+    if (!h_grid) throw std::runtime_error("GridHandle does not contain a valid host grid");
     if (!h_label_grid)
         throw std::runtime_error("GridHandle does not contain a valid host label grid");
 
@@ -47,39 +51,41 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
     double d_origin[3] = {origin[0], origin[1], origin[2]};
 #endif
 
-    float              wBBoxDimZ = (float)h_grid->worldBBox().dim()[2] * 2;
-    Vec3T              wBBoxCenter = Vec3T(h_grid->worldBBox().min() + h_grid->worldBBox().dim() * 0.5f);
+    float wBBoxDimZ = (float)h_grid->worldBBox().dim()[2] * 2;
+    Vec3T wBBoxCenter = Vec3T(h_grid->worldBBox().min() + h_grid->worldBBox().dim() * 0.5f);
     nanovdb::CoordBBox treeIndexBbox = h_grid->tree().bbox();
     std::cout << "Bounds: "
-              << "[" << treeIndexBbox.min()[0] << "," << treeIndexBbox.min()[1] << "," << treeIndexBbox.min()[2] << "] -> ["
-              << treeIndexBbox.max()[0] << "," << treeIndexBbox.max()[1] << "," << treeIndexBbox.max()[2] << "]" << std::endl;
+              << "[" << treeIndexBbox.min()[0] << "," << treeIndexBbox.min()[1] << ","
+              << treeIndexBbox.min()[2] << "] -> [" << treeIndexBbox.max()[0] << ","
+              << treeIndexBbox.max()[1] << "," << treeIndexBbox.max()[2] << "]" << std::endl;
 
     RayGenOp<Vec3T> rayGenOp(wBBoxDimZ, wBBoxCenter);
-    CompositeOp     compositeOp;
+    CompositeOp compositeOp;
 
-    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ, d_origin] __hostdev__(int start, int end, float* image, const GridT* grid, const LabelGridT* label_grid) {
+    auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ,
+                     d_origin] __hostdev__(int start, int end, float* image, const GridT* grid,
+                                           const LabelGridT* label_grid) {
         // get an accessor.
         auto acc = grid->tree().getAccessor();
         auto label_acc = label_grid->tree().getAccessor();
 
         for (int i = start; i < end; ++i) {
-            Vec3T rayEye; 
+            Vec3T rayEye;
             Vec3T rayDir;
             rayGenOp(i, width, height, rayEye, rayDir);
 
-            // change the ray direction from negative z direction to the positive x direction 
-            double rotationMatrix[3][3] = {
-                {0, 0, -1},
-                {-1, 0, 0},
-                {0, 1, 0}
-            };
+            // change the ray direction from negative z direction to the positive x direction
+            double rotationMatrix[3][3] = {{0, 0, -1}, {-1, 0, 0}, {0, 1, 0}};
 
             double x = rayDir[0];
             double y = rayDir[1];
             double z = rayDir[2];
-            rayDir[0] = rotationMatrix[0][0] * x + rotationMatrix[0][1] * y + rotationMatrix[0][2] * z;
-            rayDir[1] = rotationMatrix[1][0] * x + rotationMatrix[1][1] * y + rotationMatrix[1][2] * z;
-            rayDir[2] = rotationMatrix[2][0] * x + rotationMatrix[2][1] * y + rotationMatrix[2][2] * z;
+            rayDir[0] =
+                rotationMatrix[0][0] * x + rotationMatrix[0][1] * y + rotationMatrix[0][2] * z;
+            rayDir[1] =
+                rotationMatrix[1][0] * x + rotationMatrix[1][1] * y + rotationMatrix[1][2] * z;
+            rayDir[2] =
+                rotationMatrix[2][0] * x + rotationMatrix[2][1] * y + rotationMatrix[2][2] * z;
 
             rayEye[0] = d_origin[0];
             rayEye[1] = d_origin[1];
@@ -92,9 +98,9 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
             RayT iRay = wRay.worldToIndexF(*grid);
 
             // intersect...
-            float  t0;
+            float t0;
             CoordT ijk;
-            float  v;
+            float v;
 
             if (nanovdb::math::ZeroCrossing(iRay, acc, ijk, v, t0)) {
                 // write distance to surface. (we assume it is a uniform voxel)
@@ -103,8 +109,8 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
                 compositeOp(image, i, width, height, label, 1.0f);
             } else {
                 // write background value.
-                compositeOp(image, i, width, height, 0, 0.0f);
- 
+                // compositeOp(image, i, width, height, label, 0.0f);  // TODO fix back to 0?
+                // printf("background?\n");
             }
         }
     };
@@ -115,11 +121,10 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
     label_handle.deviceUpload();
 
     auto* d_grid = handle.deviceGrid<float>();
-    auto* d_label_grid = label_handle.deviceGrid<uint16_t>();
-    if (!d_grid)
-        throw std::runtime_error("GridHandle does not contain a valid device grid");
+    auto* d_label_grid = label_handle.deviceGrid<nanovdb::math::VecXi<28>>();
+    if (!d_grid) throw std::runtime_error("GridHandle does not contain a valid device grid");
     if (!d_label_grid)
-    throw std::runtime_error("GridHandle does not contain a valid device label grid");
+        throw std::runtime_error("GridHandle does not contain a valid device label grid");
 
     imageBuffer.deviceUpload();
     float* d_outImage = reinterpret_cast<float*>(imageBuffer.deviceData());
@@ -129,7 +134,8 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
     std::cout << "Device Upload took: " << elapsed5.count() << " ms" << std::endl;
 
     {
-        float duration = renderImage(true, renderOp, width, height, d_outImage, d_grid, d_label_grid);
+        float duration =
+            renderImage<num_semantic_classes>(true, renderOp, width, height, d_outImage, d_grid, d_label_grid);
         std::cout << "Duration(NanoVDB-Cuda) = " << duration << " ms" << std::endl;
 
         auto start3 = std::chrono::high_resolution_clock::now();
@@ -163,11 +169,13 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
 
         auto end3 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
-        std::cout << "Buffer download and displaying the image took: " << elapsed3.count() << " ms" << std::endl;
+        std::cout << "Buffer download and displaying the image took: " << elapsed3.count() << " ms"
+                  << std::endl;
     }
 #else
-    {   
-        float duration = renderImage(false, renderOp, width, height, h_outImage, h_grid, h_label_grid);
+    {
+        float duration =
+            renderImage<num_semantic_classes>(false, renderOp, width, height, h_outImage, h_grid, h_label_grid);
         std::cout << "Duration(NanoVDB-Host) = " << duration << " ms" << std::endl;
 
         // std::ostringstream filename;
@@ -199,7 +207,6 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<Buffer
         auto end3 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
         std::cout << "Displaying the image took: " << elapsed3.count() << " ms" << std::endl;
-
     }
 #endif
 }
