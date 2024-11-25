@@ -186,10 +186,9 @@ struct CompositeOp
         { 50, 255, 255},    // "other-object"
     };
 
-    template <int S>
-    inline __hostdev__ void operator()(float* outImage, int i, int w, int h, nanovdb::math::VecXi<S>& alpha, float a) const
+    template <uint16_t S>
+    inline __hostdev__ void operator()(float* outImage, int i, int w, int h, nanovdb::math::VecXi<S>& alpha) const
     {
-
         int offset;
 #if 0
         uint32_t x, y;
@@ -208,16 +207,28 @@ struct CompositeOp
 
         RGB color;
 
-        // color.r = color_map[(3*(sem_label))];
-        // color.g = color_map[(3*(sem_label))+1];
-        // color.b = color_map[(3*(sem_label))+2];
-
         color.r = color_map[sem_label][0];
         color.g = color_map[sem_label][1];
         color.b = color_map[sem_label][2];
 
-        outImage[offset] = (color.r / 255.0) + (1.0f - a);
-        outImage[w*h + offset] = (color.b / 255.0) + (1.0f - a);
-        outImage[2*w*h + offset] = (color.g / 255.0) + (1.0f - a);
+        outImage[offset] = (color.r / 255.0);
+        outImage[w*h + offset] = (color.b / 255.0);
+        outImage[2*w*h + offset] = (color.g / 255.0);
+    }
+
+    inline __hostdev__ void operator()(float* outImage, int i, int w, int h, int bg) const
+    {
+        int offset;
+#if 0
+        uint32_t x, y;
+        mortonDecode(i, x, y);
+        offset = x + y * w;
+#else
+        offset = i;
+#endif
+
+        outImage[offset] = bg; // should be 0
+        outImage[w*h + offset] = bg;
+        outImage[2*w*h + offset] = bg;
     }
 };

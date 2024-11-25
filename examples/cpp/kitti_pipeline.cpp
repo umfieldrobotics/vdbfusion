@@ -102,8 +102,6 @@ int main(int argc, char* argv[]) {
     auto kitti_root_dir = fs::path(argparser.get<std::string>("kitti_root_dir"));
     auto sequence = argparser.get<std::string>("--sequence");
 
-    const size_t num_semantic_classes = 28; // this MUST be known at compile time
-
     // Initialize dataset 
     const auto dataset =
         datasets::KITTIDataset(kitti_root_dir, sequence, n_scans, kitti_cfg.apply_pose_,

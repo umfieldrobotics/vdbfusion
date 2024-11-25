@@ -122,7 +122,7 @@ VDBVolume::ExtractTriangleMesh(bool fill_holes, float min_weight) const {
 
             // go from one-hot label back to normal
             int max_i = 0;
-            for (int i = 0; i < 28; i++) {
+            for (int i = 0; i < num_semantic_classes_; i++) {
                 if (label[i] > label[max_i]) max_i = i;
             }
             tri_labels.emplace_back(max_i);

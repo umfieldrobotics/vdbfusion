@@ -27,7 +27,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
                 BufferT& imageBuffer,
                 int index,
                 const std::vector<double> origin) {
-    constexpr int num_semantic_classes = 28; // TODO FIX
+    constexpr int num_semantic_classes = 26; // TODO FIX
     using GridT = nanovdb::FloatGrid;
     using LabelGridT = nanovdb::VecXIGrid<num_semantic_classes>;
     using CoordT = nanovdb::Coord;
@@ -106,12 +106,12 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
                 // write distance to surface. (we assume it is a uniform voxel)
                 float wT0 = t0 * float(grid->voxelSize()[0]);
                 auto label = label_acc.getValue(ijk);
-                compositeOp(image, i, width, height, label, 1.0f);
-            } else {
-                // write background value.
-                // compositeOp(image, i, width, height, label, 0.0f);  // TODO fix back to 0?
-                // printf("background?\n");
+                compositeOp(image, i, width, height, label);
             }
+            // } else {
+            //     // write background value.
+            //     compositeOp(image, i, width, height, 0);  // TODO fix back to 0?
+            // }
         }
     };
 
@@ -121,7 +121,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
     label_handle.deviceUpload();
 
     auto* d_grid = handle.deviceGrid<float>();
-    auto* d_label_grid = label_handle.deviceGrid<nanovdb::math::VecXi<28>>();
+    auto* d_label_grid = label_handle.deviceGrid<nanovdb::math::VecXi<num_semantic_classes>>();
     if (!d_grid) throw std::runtime_error("GridHandle does not contain a valid device grid");
     if (!d_label_grid)
         throw std::runtime_error("GridHandle does not contain a valid device label grid");

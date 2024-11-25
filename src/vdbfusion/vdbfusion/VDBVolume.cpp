@@ -50,6 +50,9 @@ using BufferT = nanovdb::cuda::DeviceBuffer;
 using BufferT = nanovdb::HostBuffer;
 #endif
 
+template <uint16_t S>
+using LabelT = openvdb::VecXI32<S>;
+
 namespace {
 
 float ComputeSDF(const Eigen::Vector3d& origin,
@@ -85,7 +88,7 @@ VDBVolume::VDBVolume(float voxel_size, float sdf_trunc, bool space_carving)
     weights_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
     weights_->setGridClass(openvdb::GRID_UNKNOWN);
 
-    instances_ = openvdb::VecXIGrid<num_semantic_classes_>::create(openvdb::VecXI16<num_semantic_classes_>());
+    instances_ = openvdb::VecXIGrid<num_semantic_classes_>::create(LabelT<num_semantic_classes_>());
     instances_->setName("A(x): semantics grid");
     instances_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
     instances_->setGridClass(openvdb::GRID_UNKNOWN);
@@ -245,7 +248,7 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
     openvdb::CoordBBox bbox;
 
     auto handle = nanovdb::tools::createNanoGrid<openvdb::FloatGrid, float, BufferT>(*tsdf_);
-    auto label_handle = nanovdb::tools::createNanoGrid<openvdb::VecXIGrid<num_semantic_classes_>, openvdb::VecXI16<num_semantic_classes_>, BufferT>(*instances_);
+    auto label_handle = nanovdb::tools::createNanoGrid<openvdb::VecXIGrid<num_semantic_classes_>, LabelT<num_semantic_classes_>, BufferT>(*instances_);
 
     auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
