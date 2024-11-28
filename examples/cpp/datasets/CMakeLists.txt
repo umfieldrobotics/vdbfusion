@@ -21,6 +21,6 @@
 # SOFTWARE.
 
 add_library(datasets OBJECT)
-target_sources(datasets PRIVATE KITTIOdometry.cpp)
+target_sources(datasets PRIVATE KITTIOdometry.cpp SceneNetOdometry.cpp)
 target_compile_features(datasets PRIVATE cxx_std_17)
 target_link_libraries(datasets PUBLIC Eigen3::Eigen Open3D::Open3D ${OpenCV_LIBS} ${TORCH_LIBRARIES})

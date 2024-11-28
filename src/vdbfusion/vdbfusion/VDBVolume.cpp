@@ -76,8 +76,8 @@ Eigen::Vector3d GetVoxelCenter(const openvdb::Coord& voxel, const openvdb::math:
 
 namespace vdbfusion {
 
-VDBVolume::VDBVolume(float voxel_size, float sdf_trunc, bool space_carving)
-    : voxel_size_(voxel_size), sdf_trunc_(sdf_trunc), space_carving_(space_carving) {
+VDBVolume::VDBVolume(float voxel_size, float sdf_trunc, bool space_carving, float min_weight)
+    : voxel_size_(voxel_size), sdf_trunc_(sdf_trunc), space_carving_(space_carving), min_weight_(min_weight) {
     tsdf_ = openvdb::FloatGrid::create(sdf_trunc_);
     tsdf_->setName("D(x): signed distance grid");
     tsdf_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
@@ -231,7 +231,7 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
     });
 }
 
-void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
+void VDBVolume::Render(const std::vector<double> origin_vec, const std::vector<double> rot_quat_vec, const int index) {
     // Render image and save as pfm
     std::cout << "\nFrame #" << index << std::endl;
     const int width = 691;
@@ -257,12 +257,12 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const int index) {
     auto timer_render0 = std::chrono::high_resolution_clock::now();
 
 #if defined(NANOVDB_USE_CUDA)
-    cudaStream_t stream; // Create a CUDA stream to allow for asynchronous copy of pinned CUDA memory.
-    cudaStreamCreate(&stream);
-    handle.deviceUpload(stream, false); // Copy the NanoVDB grid to the GPU asynchronously
-    runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec);
+    // cudaStream_t stream; // Create a CUDA stream to allow for asynchronous copy of pinned CUDA memory.
+    // cudaStreamCreate(&stream);
+    // handle.deviceUpload(stream, false); // Copy the NanoVDB grid to the GPU asynchronously
+    runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec, rot_quat_vec);
 #else
-    runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec);
+    runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec, rot_quat_vec);
 #endif
 
     auto timer_render1 = std::chrono::high_resolution_clock::now();

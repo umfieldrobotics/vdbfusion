@@ -70,8 +70,8 @@ PYBIND11_MODULE(vdbfusion_pybind, m) {
         "should not be used. Please reffer to the python Procesor class to "
         "check how to use the API");
     vdb_volume
-        .def(py::init<float, float, bool>(), "voxel_size"_a, "sdf_trunc"_a,
-             "space_carving"_a)
+        .def(py::init<float, float, bool, float>(), "voxel_size"_a, "sdf_trunc"_a,
+             "space_carving"_a, "min_weight"_a)
         // TODO: add support for this
         .def("_integrate",
              py::overload_cast<const std::vector<Eigen::Vector3d>&, const Eigen::Matrix4d&,
@@ -143,10 +143,10 @@ PYBIND11_MODULE(vdbfusion_pybind, m) {
 #endif
         .def(
             "_render",
-            [](VDBVolume& self, const std::vector<double> origin_vec, const int index) {
-                self.Render(origin_vec, index);
+            [](VDBVolume& self, const std::vector<double> origin_vec, const std::vector<double> rot_quat_vec, const int index) {
+                self.Render(origin_vec, rot_quat_vec, index);
             },
-            "origin_vec"_a, "index"_a)
+            "origin_vec"_a, "rot_quat_vec"_a, "index"_a)
         .def(
             "_update_tsdf",
             [](VDBVolume& self, const float& sdf, std::vector<int>& ijk,

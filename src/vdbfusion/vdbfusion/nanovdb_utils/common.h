@@ -27,7 +27,7 @@ using LabelGridT = nanovdb::VecXIGrid<S>;
 extern "C" {
 #endif
 
-extern void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<BufferT>& label_handle, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin);
+extern void runNanoVDB(nanovdb::GridHandle<BufferT>& handle, nanovdb::GridHandle<BufferT>& label_handle, int width, int height, BufferT& imageBuffer, int index, const std::vector<double> origin, const std::vector<double> quaternion);
 
 #ifdef __cplusplus
 }

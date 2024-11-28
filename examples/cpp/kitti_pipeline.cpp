@@ -109,19 +109,27 @@ int main(int argc, char* argv[]) {
 
     fmt::print("Integrating {} scans\n", dataset.size());
     vdbfusion::VDBVolume tsdf_volume(vdbfusion_cfg.voxel_size_, vdbfusion_cfg.sdf_trunc_,
-                                     vdbfusion_cfg.space_carving_);
+                                     vdbfusion_cfg.space_carving_, vdbfusion_cfg.min_weight_);
     timers::FPSTimer<10> timer;
     //modification--------------------------------cuda-------------------------------------------------------
     int index = 0; 
     //modification---------------------------------------------------------------------------------------
-    for (const auto& [scan, semantics, origin] : iterable(dataset)) {
+    for (const auto& [scan, semantics, pose] : iterable(dataset)) {
         timer.tic();
+        Eigen::Vector3d origin = pose.block<3, 1>(0, 3);
         tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; });
         timer.toc();
 
         timer.tic();
         std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
-        tsdf_volume.Render(origin_vec, index);
+
+        Eigen::Matrix3d rotation_matrix = pose.block<3,3>(0,0);
+        Eigen::Quaterniond e_quat(rotation_matrix);
+        Eigen::Quaterniond coord_frame_quat(-0.5, -0.5, 0.5, 0.5);
+        e_quat = e_quat * coord_frame_quat;
+        std::vector<double> rot_quat_vec = {e_quat.x(), e_quat.y(), e_quat.z(), e_quat.w()};
+
+        tsdf_volume.Render(origin_vec, rot_quat_vec, index);
         index++;
         timer.toc();
     }

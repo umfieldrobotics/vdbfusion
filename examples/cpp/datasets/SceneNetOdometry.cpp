@@ -43,12 +43,12 @@ namespace {
 std::vector<std::string> GetDepthFiles(const fs::path& depth_path, int n_scans) {
     std::vector<std::string> depth_files;
     for (const auto& entry : fs::directory_iterator(depth_path)) {
-        if (entry.path().extension() == ".tif") {
+        if (entry.path().extension() == ".png") {
             depth_files.emplace_back(entry.path().string());
         }
     }
     if (depth_files.empty()) {
-        std::cerr << depth_path << "path doesn't have any .tif" << std::endl;
+        std::cerr << depth_path << "path doesn't have any .png" << std::endl;
         exit(1);
     }
     std::sort(depth_files.begin(), depth_files.end());
@@ -76,12 +76,12 @@ std::vector<std::string> GetLabelFiles(const fs::path& label_path, int n_scans) 
     return label_files;
 }
 
-std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadSceneNetDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file) {
-    // Read tiff
+std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadSceneNetDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file, float min_range, float max_range) {
+    // Read depth
     cv::Mat depth_mat = cv::imread(depth_path, cv::IMREAD_UNCHANGED);
 
     // Read label
-    cv::Mat label_mat = cv::imread(label_path, cv::IMREAD_GRAYSCALE);
+    cv::Mat label_mat = cv::imread(label_path, cv::IMREAD_UNCHANGED);
 
     assert(depth_mat.size() == label_mat.size());
 
@@ -91,15 +91,45 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadSceneNetDept
 
     for (size_t i = 0; i < depth_mat.size().height; i++) {
         for (size_t j = 0; j < depth_mat.size().width; j++) {
-            depth_data[depth_mat.size().width*i+j] = float(depth_mat.at<double>(i, j, 0)) / 1000; // SceneNet depth values are in millimeters
+            depth_data[depth_mat.size().width*i+j] = float(depth_mat.at<uint16_t>(i, j, 0)) / 1000.0; // SceneNet depth values are in millimeters
             label_data[label_mat.size().width*i+j] = int(label_mat.at<uchar>(i, j));
         }
     }
 
-    float fx = 718.856;
-    float fy = 718.856;
-    float cx = 607.1928;
-    float cy = 185.2157;
+    // Read in config file parameters TODO move this out of loop
+    float fx = 0.0, fy = 0.0, cx = 0.0, cy = 0.0;
+
+    std::ifstream calib_in(calib_file, std::ios_base::in);
+
+    if (!calib_in.is_open()) {
+        std::cerr << "Error: Could not open the file " << calib_file << "\n";
+        exit(0);
+    }
+
+    std::string line;
+    while (std::getline(calib_in, line)) {
+        if (line.empty()) continue;
+
+        size_t colonPos = line.find(':');
+
+        std::string key = line.substr(0, colonPos);
+        std::string value = line.substr(colonPos + 1);
+
+        key.erase(0, key.find_first_not_of(" \t"));
+        key.erase(key.find_last_not_of(" \t") + 1);
+        value.erase(0, value.find_first_not_of(" \t"));
+        value.erase(value.find_last_not_of(" \t") + 1);
+
+        if (key == "fx") {
+            fx = std::stod(value);;
+        } else if (key == "fy") {
+            fy = std::stod(value);;
+        } else if (key == "cx") {
+            cx = std::stod(value);;
+        } else if (key == "cy") {
+            cy = std::stod(value);;
+        }
+        }
 
     std::vector<Eigen::Vector3d> pc_points; // store the 3D points for creating the pointcloud
     std::vector<uint32_t> labels; // store the labels that aren't tossed
@@ -109,14 +139,22 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadSceneNetDept
     
     for (size_t u = 0; u < num_rows; u++) {
         for (size_t v = 0; v < num_cols; v++) {
-            size_t i = num_cols*u+v;
+            size_t i = num_cols * u + v;
 
-            float z = depth_data[i];
-            if (z < 0 || std::isnan(z)) z = 0;
-            else if (z > 30) continue; // skip this point if it's out of the max depth range
+            float d = depth_data[i];
 
-            float x = (v - cx) * z / fx;
-            float y = (u - cy) * z / fy;
+            if (d <= 0 || std::isnan(d)) continue;
+            if (d > max_range || d < min_range) continue; // Skip if out of range
+
+            float x_norm = (v - cx) / fx;
+            float y_norm = (u - cy) / fy;
+
+            // Depth value as Euclidean distance, need to convert
+            float norm_squared = x_norm * x_norm + y_norm * y_norm + 1.0f;
+            float z = d / std::sqrt(norm_squared);
+
+            float x = x_norm * z;
+            float y = y_norm * z;
 
             Eigen::Vector3d p {x, y, z};
 
@@ -125,62 +163,11 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadSceneNetDept
         }
     }
 
-    // TODO: delete most of this???
+
     open3d::geometry::PointCloud pc = open3d::geometry::PointCloud(pc_points);
-
-    Eigen::Matrix4d T_cam_velo = Eigen::Matrix4d::Zero();
-    Eigen::Matrix4d T_velo_cam = Eigen::Matrix4d::Zero();
-
-    // auxiliary variables to read the txt files
-    std::string ss;
-    float P_00, P_01, P_02, P_03, P_10, P_11, P_12, P_13, P_20, P_21, P_22, P_23;
-
-    std::ifstream calib_in(calib_file, std::ios_base::in);
-    // clang-format off
-    while (calib_in >> ss >>
-           P_00 >> P_01 >> P_02 >> P_03 >>
-           P_10 >> P_11 >> P_12 >> P_13 >>
-           P_20 >> P_21 >> P_22 >> P_23) {
-        if (ss == "Tr:") {
-            T_cam_velo << P_00, P_01, P_02, P_03,
-                          P_10, P_11, P_12, P_13,
-                          P_20, P_21, P_22, P_23,
-                          0.00, 0.00, 0.00, 1.00;
-            T_velo_cam = T_cam_velo.inverse(); // T_velo_cam is from camera to velodyne
-        }
-    }
-    // clang-format on
-    
     std::vector<Eigen::Vector3d> points = pc.points_;
 
     return std::make_tuple(points, labels);
-}
-
-std::vector<uint32_t> ReadSceneNetGroundTruthLabels(const std::string& path) {
-    // Load semantics info from text file
-    std::ifstream infile(path.c_str()); // Open the input file
-    assert(infile.is_open() && "ReadSceneNetSemantics| not able to open file");
-
-    std::vector<uint32_t> labels; // Vector to store uint32_t numbers
-    std::string line;
-
-    while (std::getline(infile,line)) {
-        std::stringstream ss(line);
-        std::vector<uint32_t> v;
-
-        std::string word;
-        while(ss >> word){ // read in format "inst_label semantic_label" from text file
-            v.push_back(std::stoul(word));
-        }
-
-        uint32_t label = (static_cast<uint32_t>(v[0]) << 16) | v[1]; // encode instance label in upper 16 bits and semantic label in lower 16 bits
-
-        labels.push_back(label); // push back instance and semantic label in one uint32_t
-    }
-
-    infile.close(); // Close the file
-
-    return labels;
 }
 
 void PreProcessCloud(std::vector<Eigen::Vector3d>& points, std::vector<uint32_t>& labels, float min_range, float max_range) {
@@ -222,42 +209,21 @@ std::vector<Eigen::Matrix4d> GetGTPoses(const fs::path& poses_file, const fs::pa
     std::string ss;
     float P_00, P_01, P_02, P_03, P_10, P_11, P_12, P_13, P_20, P_21, P_22, P_23;
 
-    std::ifstream calib_in(calib_file, std::ios_base::in);
-    // clang-format off
-    while (calib_in >> ss >>
-           P_00 >> P_01 >> P_02 >> P_03 >>
-           P_10 >> P_11 >> P_12 >> P_13 >>
-           P_20 >> P_21 >> P_22 >> P_23) {
-        if (ss == "Tr:") {
-            T_cam_velo << P_00, P_01, P_02, P_03,
-                          P_10, P_11, P_12, P_13,
-                          P_20, P_21, P_22, P_23,
-                          0.00, 0.00, 0.00, 1.00;
-            T_velo_cam = T_cam_velo.inverse();
-        }
-    }
-    // clang-format on
-
     std::ifstream poses_in(poses_file, std::ios_base::in);
     // clang-format off
     while (poses_in >>
-           P_00 >> P_01 >> P_02 >> P_03 >>
-           P_10 >> P_11 >> P_12 >> P_13 >>
-           P_20 >> P_21 >> P_22 >> P_23) {
+            P_00 >> P_01 >> P_02 >> P_03 >>
+            P_10 >> P_11 >> P_12 >> P_13 >>
+            P_20 >> P_21 >> P_22 >> P_23) {
         Eigen::Matrix4d P;
         P << P_00, P_01, P_02, P_03,
              P_10, P_11, P_12, P_13,
              P_20, P_21, P_22, P_23,
              0.00, 0.00, 0.00, 1.00;
-        if (rgbd_) {
-            poses.emplace_back(T_velo_cam * P); // IF FROM DEPTH
-        }
-        else {
-            poses.emplace_back(T_velo_cam * P * T_cam_velo); // IF FROM VELODYNE
-        }
+        poses.emplace_back(P);
     }
     // clang-format on
-    return poses; // in velodyne coordinate frame
+    return poses; // in camera coordinate frame
 }
 
 }  // namespace 
@@ -270,15 +236,15 @@ SceneNetDataset::SceneNetDataset(const std::string& scenenet_root_dir,
     rgbd_ = rgbd;
     // TODO: to be completed
     auto scenenet_root_dir_ = fs::absolute(fs::path(scenenet_root_dir));
-    auto scenenet_sequence_dir = fs::absolute(fs::path(scenenet_root_dir) / "sequences" / sequence);
+    auto scenenet_sequence_dir = fs::absolute(fs::path(scenenet_root_dir) / "train/0" / sequence);
 
     // Read data, cache it inside the class.
-    poses_ = GetGTPoses(scenenet_root_dir_ / "poses" / std::string(sequence + ".txt"),
-                        scenenet_sequence_dir / "calib.txt", rgbd_);
-    scan_files_ = GetVelodyneFiles(fs::absolute(scenenet_sequence_dir / "velodyne/"), n_scans);
+    poses_ = GetGTPoses(scenenet_sequence_dir / "poses.txt",
+                        scenenet_sequence_dir / "intrinsics.txt", rgbd_);
+    scan_files_ = GetDepthFiles(fs::absolute(scenenet_sequence_dir / "depth/"), n_scans);
 }
 
-SceneNetDataset::SceneNetDataset(const std::string& scenenet_root_dir_,
+SceneNetDataset::SceneNetDataset(const std::string& scenenet_root_dir,
                            const std::string& sequence,
                            int n_scans,
                            bool apply_pose,
@@ -291,38 +257,33 @@ SceneNetDataset::SceneNetDataset(const std::string& scenenet_root_dir_,
       min_range_(min_range),
       max_range_(max_range),
       rgbd_(rgbd) {
-    auto scenenet_root_dir_ = fs::absolute(fs::path(scenenet_root_dir_));
-    scenenet_sequence_dir_ = fs::absolute(fs::path(scenenet_root_dir_) / "sequences" / sequence);
+    auto scenenet_root_dir_ = fs::absolute(fs::path(scenenet_root_dir));
+    scenenet_sequence_dir_ = fs::absolute(fs::path(scenenet_root_dir_) / "train/0" / sequence);
 
     // Read data, cache it inside the class.
-    poses_ = GetGTPoses(scenenet_root_dir_ / "poses" / std::string(sequence + ".txt"),
-                        scenenet_sequence_dir_ / "calib.txt", rgbd_);
+    poses_ = GetGTPoses(scenenet_sequence_dir_ / "poses.txt",
+                        scenenet_sequence_dir_ / "intrinsics.txt", rgbd_);
     if(rgbd_) {
-        depth_files_ = GetDepthFiles(fs::absolute(scenenet_sequence_dir_ / "depth_tif/"), n_scans);
-        label_files_ = GetLabelFiles(fs::absolute(scenenet_sequence_dir_ / "image_2_labels/"), n_scans);
+        depth_files_ = GetDepthFiles(fs::absolute(scenenet_sequence_dir_ / "depth/"), n_scans);
+        label_files_ = GetLabelFiles(fs::absolute(scenenet_sequence_dir_ / "semantic/"), n_scans);
     }
     else {
         std::cout << "ERROR: There are no pointclouds for SceneNet. Please make sure that the rgbd option in the .yaml file is set to True." << std::endl;
     }
 }
 
-std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Vector3d> SceneNetDataset::operator[](int idx) const {
+std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Matrix4d> SceneNetDataset::operator[](int idx) const {
     if (rgbd_) {
-        auto [points, semantics] = ReadSceneNetDepthAndLabels(depth_files_[idx], label_files_[idx], fs::absolute(scenenet_sequence_dir_ / "calib.txt"));
+        auto [points, semantics] = ReadSceneNetDepthAndLabels(depth_files_[idx], label_files_[idx], fs::absolute(scenenet_sequence_dir_ / "intrinsics.txt"), min_range_, max_range_);
 
         // if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
         if (apply_pose_) TransformPoints(points, poses_[idx]);
-        const Eigen::Vector3d origin = poses_[idx].block<3, 1>(0, 3);
-        return std::make_tuple(points, semantics, origin);
+        // const Eigen::Matrix4d origin = poses_[idx].block<3, 1>(0, 3);
+        return std::make_tuple(points, semantics, poses_[idx]);
     }
     else {
-        std::vector<Eigen::Vector3d> points = ReadSceneNetVelodyne(scan_files_[idx]);
-        std::vector<uint32_t> semantics = ReadSceneNetGroundTruthLabels(gt_label_files_[idx]);
-
-        if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
-        if (apply_pose_) TransformPoints(points, poses_[idx]);
-        const Eigen::Vector3d origin = poses_[idx].block<3, 1>(0, 3);
-        return std::make_tuple(points, semantics, origin);
+        std::cerr << "The only datatype option for SceneNet is rgbd!\n";
+        exit(0);
     }
 }
 }  // namespace datasets

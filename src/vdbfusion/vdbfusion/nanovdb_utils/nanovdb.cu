@@ -26,8 +26,9 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
                 int height,
                 BufferT& imageBuffer,
                 int index,
-                const std::vector<double> origin) {
-    constexpr int num_semantic_classes = 26; // TODO FIX
+                const std::vector<double> origin,
+                const std::vector<double> quaternion) {
+    constexpr int num_semantic_classes = NCLASSES; // TODO FIX
     using GridT = nanovdb::FloatGrid;
     using LabelGridT = nanovdb::VecXIGrid<num_semantic_classes>;
     using CoordT = nanovdb::Coord;
@@ -47,8 +48,13 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
     double* d_origin;
     cudaMalloc((void**)&d_origin, 3 * sizeof(double));
     cudaMemcpy(d_origin, origin.data(), 3 * sizeof(double), cudaMemcpyHostToDevice);
+
+    double* d_quaternion;
+    cudaMalloc((void**)&d_quaternion, 4 * sizeof(double));
+    cudaMemcpy(d_quaternion, quaternion.data(), 4 * sizeof(double), cudaMemcpyHostToDevice);
 #else
     double d_origin[3] = {origin[0], origin[1], origin[2]};
+    double d_quaternion[4] = {quaternion[0], quaternion[1], quaternion[3], quaternion[4]};
 #endif
 
     float wBBoxDimZ = (float)h_grid->worldBBox().dim()[2] * 2;
@@ -63,7 +69,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
     CompositeOp compositeOp;
 
     auto renderOp = [width, height, rayGenOp, compositeOp, treeIndexBbox, wBBoxDimZ,
-                     d_origin] __hostdev__(int start, int end, float* image, const GridT* grid,
+                     d_origin, d_quaternion] __hostdev__(int start, int end, float* image, const GridT* grid,
                                            const LabelGridT* label_grid) {
         // get an accessor.
         auto acc = grid->tree().getAccessor();
@@ -74,18 +80,24 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
             Vec3T rayDir;
             rayGenOp(i, width, height, rayEye, rayDir);
 
-            // change the ray direction from negative z direction to the positive x direction
-            double rotationMatrix[3][3] = {{0, 0, -1}, {-1, 0, 0}, {0, 1, 0}};
+            double x = d_quaternion[0];
+            double y = d_quaternion[1];
+            double z = d_quaternion[2];
+            double w = d_quaternion[3];
 
-            double x = rayDir[0];
-            double y = rayDir[1];
-            double z = rayDir[2];
-            rayDir[0] =
-                rotationMatrix[0][0] * x + rotationMatrix[0][1] * y + rotationMatrix[0][2] * z;
-            rayDir[1] =
-                rotationMatrix[1][0] * x + rotationMatrix[1][1] * y + rotationMatrix[1][2] * z;
-            rayDir[2] =
-                rotationMatrix[2][0] * x + rotationMatrix[2][1] * y + rotationMatrix[2][2] * z;
+            // Compute intermediate values
+            double uv0 = y * rayDir[2] - z * rayDir[1];
+            double uv1 = z * rayDir[0] - x * rayDir[2];
+            double uv2 = x * rayDir[1] - y * rayDir[0];
+
+            double uuv0 = y * uv2 - z * uv1;
+            double uuv1 = z * uv0 - x * uv2;
+            double uuv2 = x * uv1 - y * uv0;
+
+            // Apply rotation
+            rayDir[0] = rayDir[0] + 2.0 * (w * uv0 + uuv0);
+            rayDir[1] = rayDir[1] + 2.0 * (w * uv1 + uuv1);
+            rayDir[2] = rayDir[2] + 2.0 * (w * uv2 + uuv2);
 
             rayEye[0] = d_origin[0];
             rayEye[1] = d_origin[1];
@@ -107,11 +119,10 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
                 float wT0 = t0 * float(grid->voxelSize()[0]);
                 auto label = label_acc.getValue(ijk);
                 compositeOp(image, i, width, height, label);
+            } else {
+                // write background value.
+                compositeOp(image, i, width, height, 0);
             }
-            // } else {
-            //     // write background value.
-            //     compositeOp(image, i, width, height, 0);  // TODO fix back to 0?
-            // }
         }
     };
 
@@ -177,10 +188,6 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
         float duration =
             renderImage<num_semantic_classes>(false, renderOp, width, height, h_outImage, h_grid, h_label_grid);
         std::cout << "Duration(NanoVDB-Host) = " << duration << " ms" << std::endl;
-
-        // std::ostringstream filename;
-        // filename << "examples/python/out/pfms/" << "loop_output" << index << ".pfm";
-        // saveImage(filename.str(), width, height, (float*)imageBuffer.data());
 
         auto start3 = std::chrono::high_resolution_clock::now();
 

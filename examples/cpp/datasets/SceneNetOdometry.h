@@ -51,7 +51,7 @@ public:
                           bool rgbd = false);
 
     /// Returns a point cloud and the origin of the sensor in world coordinate frames
-    [[nodiscard]] std::tuple<PointCloud, std::vector<uint32_t>, Point> operator[](int idx) const;
+    [[nodiscard]] std::tuple<PointCloud, std::vector<uint32_t>, Eigen::Matrix4d> operator[](int idx) const;
     [[nodiscard]] std::size_t size() const { if(rgbd_) return depth_files_.size(); else return scan_files_.size(); }
 
 public:
@@ -61,6 +61,7 @@ public:
     float max_range_ = std::numeric_limits<float>::max();
     bool rgbd_ = false;
     std::filesystem::path scenenet_sequence_dir_;
+    static constexpr uint16_t num_semantic_classes = NCLASSES; // this MUST be known at compile time
 
 private:
     std::vector<std::string> scan_files_;
@@ -68,7 +69,7 @@ private:
     std::vector<std::string> gt_label_files_;
     std::vector<std::string> label_files_;
     std::vector<Eigen::Matrix4d> poses_;
-    std::vector<Eigen::Matrix<int, 1, 28>> semantics_;
+    std::vector<Eigen::Matrix<int, 1, num_semantic_classes>> semantics_;
 };
 
 }  // namespace datasets

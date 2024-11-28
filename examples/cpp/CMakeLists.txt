@@ -30,6 +30,7 @@ set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
 set(CUDA_TOOLKIT_HOME /usr/local/cuda)
 set(CUDA_HOME /usr/local/cuda)
 
+add_compile_definitions(NCLASSES=26)
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   find_package(VDBFusion REQUIRED)
@@ -57,3 +58,8 @@ add_executable(kitti_pipeline kitti_pipeline.cpp)
 target_compile_features(kitti_pipeline PUBLIC cxx_std_17)
 target_link_libraries(kitti_pipeline TBB::tbb VDBFusion::vdbfusion argparse::argparse fmt::fmt igl::core datasets yaml-cpp ${CUDA_LIBRARIES})
 set_target_properties(kitti_pipeline PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(scenenet_pipeline scenenet_pipeline.cpp)
+target_compile_features(scenenet_pipeline PUBLIC cxx_std_17)
+target_link_libraries(scenenet_pipeline TBB::tbb VDBFusion::vdbfusion argparse::argparse fmt::fmt igl::core datasets yaml-cpp ${CUDA_LIBRARIES})
+set_target_properties(scenenet_pipeline PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

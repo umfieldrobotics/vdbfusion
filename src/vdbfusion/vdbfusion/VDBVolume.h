@@ -34,7 +34,7 @@ namespace vdbfusion {
 
 class VDBVolume {
 public:
-    VDBVolume(float voxel_size, float sdf_trunc, bool space_carving);
+    VDBVolume(float voxel_size, float sdf_trunc, bool space_carving, float min_weight);
     ~VDBVolume() = default;
 
 public:
@@ -76,6 +76,7 @@ public:
 
     /// @brief Render volume from viewpoint of origin and save as a pfm
     void Render(const std::vector<double> origin_vec,
+                const std::vector<double> rot_quat_vec,
                 const int index);
 
     /// @brief Fuse a new given sdf value at the given voxel location, thread-safe
@@ -95,7 +96,8 @@ public:
     float voxel_size_;
     float sdf_trunc_;
     bool space_carving_;
-    static constexpr uint16_t num_semantic_classes_ = 26;  // MUST be defined at compile-time
+    float min_weight_;
+    static constexpr uint16_t num_semantic_classes_ = NCLASSES;  // MUST be defined at compile-time
 
     /// OpenVDB Grids modeling the signed distance field and the weight grid
     openvdb::FloatGrid::Ptr tsdf_;
