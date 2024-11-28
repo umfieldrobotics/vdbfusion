@@ -102,7 +102,7 @@ public:
     /// OpenVDB Grids modeling the signed distance field and the weight grid
     openvdb::FloatGrid::Ptr tsdf_;
     openvdb::FloatGrid::Ptr weights_;
-    openvdb::VecXIGrid<num_semantic_classes_>::Ptr instances_;
+    openvdb::Int16Grid::Ptr semantics_;
 };
 
 }  // namespace vdbfusion

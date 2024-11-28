@@ -20,8 +20,7 @@ using BufferT = nanovdb::cuda::DeviceBuffer;
 using BufferT = nanovdb::HostBuffer;
 #endif
 
-template <int S>
-using LabelGridT = nanovdb::VecXIGrid<S>;
+using LabelGridT = nanovdb::Int16Grid;
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,7 +64,7 @@ inline __hostdev__ void mortonEncode(uint32_t& code, uint32_t x, uint32_t y)
 }
 
 template<int S, typename RenderFn, typename GridT>
-inline float renderImage(bool useCuda, const RenderFn renderOp, int width, int height, float* image, const GridT* grid, const LabelGridT<S>* label_grid)
+inline float renderImage(bool useCuda, const RenderFn renderOp, int width, int height, float* image, const GridT* grid, const LabelGridT* label_grid)
 {
     using ClockT = std::chrono::high_resolution_clock;
     auto t0 = ClockT::now();
@@ -186,8 +185,7 @@ struct CompositeOp
         { 50, 255, 255},    // "other-object"
     };
 
-    template <uint16_t S>
-    inline __hostdev__ void operator()(float* outImage, int i, int w, int h, nanovdb::math::VecXi<S>& alpha) const
+    inline __hostdev__ void operator()(float* outImage, int i, int w, int h, int16_t sem_label) const
     {
         int offset;
 #if 0
@@ -197,14 +195,6 @@ struct CompositeOp
 #else
         offset = i;
 #endif
-        // maximum a posteriori estimation of dirichlet alpha parameters
-        int max_i = 0;
-        for (int i = 0; i < S; i++) {
-            if (alpha[i] > alpha[max_i]) max_i = i;
-        }
-
-        auto sem_label = max_i;
-
         RGB color;
 
         color.r = color_map[sem_label][0];
