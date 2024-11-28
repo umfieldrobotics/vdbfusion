@@ -85,7 +85,11 @@ argparse::ArgumentParser ArgParse(int argc, char* argv[]) {
 }  // namespace
 
 
-int main(int argc, char* argv[]) {    
+int main(int argc, char* argv[]) {
+
+    // Disable clog (debug) prints
+    std::ofstream nullstream;
+    std::clog.rdbuf(nullstream.rdbuf());
 
     auto argparser = ArgParse(argc, argv);
 
@@ -146,14 +150,14 @@ int main(int argc, char* argv[]) {
         openvdb::io::File(filename).write({tsdf_grid});
     }
 
-    std::string map_name_instance = fmt::format("{out_dir}/kitti_{seq}_{n_scans}_instance",
+    std::string map_name_semantics = fmt::format("{out_dir}/kitti_{seq}_{n_scans}_semantics",
                                        "out_dir"_a = argparser.get<std::string>("mesh_output_dir"),
                                        "seq"_a = sequence, "n_scans"_a = n_scans);
     {
-        timers::ScopeTimer timer2("Writing instance VDB grid to disk");
-        auto instance_grid = tsdf_volume.instances_;
-        std::string filename = fmt::format("{map_name}.vdb", "map_name"_a = map_name_instance);
-        openvdb::io::File(filename).write({instance_grid});
+        timers::ScopeTimer timer2("Writing semantic VDB grid to disk");
+        auto semantics_grid = tsdf_volume.semantics_;
+        std::string filename = fmt::format("{map_name}.vdb", "map_name"_a = map_name_semantics);
+        openvdb::io::File(filename).write({semantics_grid});
     }
 
     // Run marching cubes and save a .ply file

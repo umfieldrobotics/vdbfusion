@@ -68,7 +68,7 @@ VDBVolume::ExtractTriangleMesh(bool fill_holes, float min_weight) const {
 
     auto tsdf_acc = tsdf_->getAccessor();
     auto weights_acc = weights_->getAccessor();
-    auto labels_acc = instances_->getAccessor();
+    auto labels_acc = semantics_->getAccessor();
     for (auto iter = tsdf_->beginValueOn(); iter; ++iter) {
         int cube_index = 0;
         float f[8];
@@ -115,7 +115,7 @@ VDBVolume::ExtractTriangleMesh(bool fill_holes, float min_weight) const {
             }
         }
         for (int i = 0; tri_table[cube_index][i] != -1; i += 3) {
-            auto label = labels_acc.getValue(openvdb::Coord(voxel.x(), voxel.y(), voxel.z())); // this should be the instance label for that voxel
+            auto label = labels_acc.getValue(openvdb::Coord(voxel.x(), voxel.y(), voxel.z())); // this should be the semantic label for that voxel
             triangles.emplace_back(edge_to_index[tri_table[cube_index][i]],
                                    edge_to_index[tri_table[cube_index][i + 2]],
                                    edge_to_index[tri_table[cube_index][i + 1]]);

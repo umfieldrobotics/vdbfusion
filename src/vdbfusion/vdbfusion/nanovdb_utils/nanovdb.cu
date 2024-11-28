@@ -60,7 +60,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
     float wBBoxDimZ = (float)h_grid->worldBBox().dim()[2] * 2;
     Vec3T wBBoxCenter = Vec3T(h_grid->worldBBox().min() + h_grid->worldBBox().dim() * 0.5f);
     nanovdb::CoordBBox treeIndexBbox = h_grid->tree().bbox();
-    std::cout << "Bounds: "
+    std::clog << "Bounds: "
               << "[" << treeIndexBbox.min()[0] << "," << treeIndexBbox.min()[1] << ","
               << treeIndexBbox.min()[2] << "] -> [" << treeIndexBbox.max()[0] << ","
               << treeIndexBbox.max()[1] << "," << treeIndexBbox.max()[2] << "]" << std::endl;
@@ -142,12 +142,12 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
 
     auto t6 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed5 = t6 - t5;
-    std::cout << "Device Upload took: " << elapsed5.count() << " ms" << std::endl;
+    std::clog << "Device Upload took: " << elapsed5.count() << " ms" << std::endl;
 
     {
         float duration =
             renderImage<num_semantic_classes>(true, renderOp, width, height, d_outImage, d_grid, d_label_grid);
-        std::cout << "Duration(NanoVDB-Cuda) = " << duration << " ms" << std::endl;
+        std::clog << "Duration(NanoVDB-Cuda) = " << duration << " ms" << std::endl;
 
         auto start3 = std::chrono::high_resolution_clock::now();
 
@@ -180,14 +180,14 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
 
         auto end3 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
-        std::cout << "Buffer download and displaying the image took: " << elapsed3.count() << " ms"
+        std::clog << "Buffer download and displaying the image took: " << elapsed3.count() << " ms"
                   << std::endl;
     }
 #else
     {
         float duration =
             renderImage<num_semantic_classes>(false, renderOp, width, height, h_outImage, h_grid, h_label_grid);
-        std::cout << "Duration(NanoVDB-Host) = " << duration << " ms" << std::endl;
+        std::clog << "Duration(NanoVDB-Host) = " << duration << " ms" << std::endl;
 
         auto start3 = std::chrono::high_resolution_clock::now();
 
@@ -213,7 +213,7 @@ void runNanoVDB(nanovdb::GridHandle<BufferT>& handle,
 
         auto end3 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed3 = end3 - start3;
-        std::cout << "Displaying the image took: " << elapsed3.count() << " ms" << std::endl;
+        std::clog << "Displaying the image took: " << elapsed3.count() << " ms" << std::endl;
     }
 #endif
 }

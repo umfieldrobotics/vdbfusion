@@ -88,10 +88,10 @@ VDBVolume::VDBVolume(float voxel_size, float sdf_trunc, bool space_carving, floa
     weights_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
     weights_->setGridClass(openvdb::GRID_UNKNOWN);
 
-    instances_ = openvdb::VecXIGrid<num_semantic_classes_>::create(LabelT<num_semantic_classes_>());
-    instances_->setName("A(x): semantics grid");
-    instances_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
-    instances_->setGridClass(openvdb::GRID_UNKNOWN);
+    semantics_ = openvdb::VecXIGrid<num_semantic_classes_>::create(LabelT<num_semantic_classes_>());
+    semantics_->setName("A(x): semantics grid");
+    semantics_->setTransform(openvdb::math::Transform::createLinearTransform(voxel_size_));
+    semantics_->setGridClass(openvdb::GRID_UNKNOWN);
 }
 
 void VDBVolume::UpdateTSDF(const float& sdf,
@@ -142,7 +142,7 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
     // Get the "unsafe" version of the grid acessors
     auto tsdf_acc = tsdf_->getUnsafeAccessor();
     auto weights_acc = weights_->getUnsafeAccessor();
-    auto labels_acc = instances_->getUnsafeAccessor();
+    auto labels_acc = semantics_->getUnsafeAccessor();
 
     // Launch an for_each execution, use std::execution::par to parallelize this region
     std::for_each(points.cbegin(), points.cend(), [&](const auto& point) {
@@ -233,7 +233,7 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
 
 void VDBVolume::Render(const std::vector<double> origin_vec, const std::vector<double> rot_quat_vec, const int index) {
     // Render image and save as pfm
-    std::cout << "\nFrame #" << index << std::endl;
+    std::clog << "\nFrame #" << index << std::endl;
     const int width = 691;
     const int height = 256;
 
@@ -242,17 +242,17 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const std::vector<d
     imageBuffer.init(3 * width * height * sizeof(float)); // needs to be a 3 channel image
     auto timer_imgbuff1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed0 = timer_imgbuff1 - timer_imgbuff0;
-    std::cout << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
+    std::clog << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
 
     auto timer_nanovdbconv0 = std::chrono::high_resolution_clock::now();
     openvdb::CoordBBox bbox;
 
     auto handle = nanovdb::tools::createNanoGrid<openvdb::FloatGrid, float, BufferT>(*tsdf_);
-    auto label_handle = nanovdb::tools::createNanoGrid<openvdb::VecXIGrid<num_semantic_classes_>, LabelT<num_semantic_classes_>, BufferT>(*instances_);
+    auto label_handle = nanovdb::tools::createNanoGrid<openvdb::VecXIGrid<num_semantic_classes_>, LabelT<num_semantic_classes_>, BufferT>(*semantics_);
 
     auto timer_nanovdbconv1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed1 = timer_nanovdbconv1 - timer_nanovdbconv0;
-    std::cout << "Conversion to NanoVDB took: " << elapsed1.count() << " ms" << std::endl;
+    std::clog << "Conversion to NanoVDB took: " << elapsed1.count() << " ms" << std::endl;
 
     auto timer_render0 = std::chrono::high_resolution_clock::now();
 
@@ -267,7 +267,7 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const std::vector<d
 
     auto timer_render1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed2 = timer_render1 - timer_render0;
-    std::cout << "NanoVDB rendering took: " << elapsed2.count() << " ms" << std::endl;
+    std::clog << "NanoVDB rendering took: " << elapsed2.count() << " ms" << std::endl;
 }
 
 openvdb::FloatGrid::Ptr VDBVolume::Prune(float min_weight) const {

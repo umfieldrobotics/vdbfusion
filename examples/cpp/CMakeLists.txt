@@ -30,7 +30,7 @@ set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
 set(CUDA_TOOLKIT_HOME /usr/local/cuda)
 set(CUDA_HOME /usr/local/cuda)
 
-add_compile_definitions(NCLASSES=26)
+add_compile_definitions(NCLASSES=14)
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   find_package(VDBFusion REQUIRED)

@@ -177,7 +177,7 @@ PYBIND11_MODULE(vdbfusion_pybind, m) {
         .def("_prune", &VDBVolume::Prune, "min_weight"_a)
         .def_readwrite("_tsdf", &VDBVolume::tsdf_)
         .def_readwrite("_weights", &VDBVolume::weights_)
-        .def_readwrite("_instances", &VDBVolume::instances_)
+        .def_readwrite("_semantics", &VDBVolume::semantics_)
 #endif
         .def_readwrite("_voxel_size", &VDBVolume::voxel_size_)
         .def_readwrite("_sdf_trunc", &VDBVolume::sdf_trunc_)

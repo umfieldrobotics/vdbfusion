@@ -57,7 +57,7 @@ class KITTIOdometryDataset:
             if os.path.exists(self.label_dir):
                 self.label_files = sorted(glob.glob(self.label_dir + "*.png"))
             else:
-                print("No ground truth label files found. Continuing with methods to predict and track instance semantics.")
+                print("No ground truth label files found. Continuing with methods to predict and track semantics.")
                 self.label_files = None
         elif self.config['rgbd'] == False and self.config['pointcloud'] == True:
             self.velodyne_dir = os.path.join(self.kitti_sequence_dir, "velodyne/")  
@@ -67,7 +67,7 @@ class KITTIOdometryDataset:
             if os.path.exists(self.label_dir):
                 self.label_files = sorted(glob.glob(self.label_dir + "*.label"))
             else:
-                print("No ground truth label files found. Continuing with methods to predict and track instance semantics.")
+                print("No ground truth label files found. Continuing with methods to predict and track semantics.")
                 self.label_files = None
 
         else:

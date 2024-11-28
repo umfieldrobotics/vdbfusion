@@ -278,7 +278,6 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Matrix4d>
 
         // if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
         if (apply_pose_) TransformPoints(points, poses_[idx]);
-        // const Eigen::Matrix4d origin = poses_[idx].block<3, 1>(0, 3);
         return std::make_tuple(points, semantics, poses_[idx]);
     }
     else {
