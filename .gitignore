@@ -8,6 +8,8 @@ examples/python/out
 **/dataset/
 examples/notebooks/semantic-kitti-odometry/
 examples/notebooks/scenenet
+examples/cpp/scenenet_pipeline
+examples/cpp/kitti_pipeline
 
 # 3D Artifacts
 **/*.png
