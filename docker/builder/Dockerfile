@@ -85,7 +85,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     python-numpy \
     && rm -rf /var/lib/apt/lists/*
 
-# Install boost 1.73
+# Install boost 1.80
 RUN wget https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz
 RUN tar -xf boost_1_80_0.tar.gz
 RUN cd boost_1_80_0 && \
