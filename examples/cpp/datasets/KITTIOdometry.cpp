@@ -350,11 +350,17 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Matrix4d>
         return std::make_tuple(points, semantics, poses_[idx]);
     }
     else {
+        auto t1 = std::chrono::high_resolution_clock::now();
         std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
         std::vector<uint32_t> semantics = ReadKITTIGroundTruthLabels(gt_label_files_[idx]);
 
         // if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
         if (apply_pose_) TransformPoints(points, poses_[idx]);
+
+        auto t2 = std::chrono::high_resolution_clock::now();
+
+        std::chrono::duration<double, std::milli> elapsed = t2 - t1;
+        if (idx % 25 == 0) std::cout << "Preprocess time: " << elapsed.count()/1e3 << std::endl;
         return std::make_tuple(points, semantics, poses_[idx]);
     }
 }
