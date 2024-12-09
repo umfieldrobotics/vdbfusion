@@ -76,7 +76,7 @@ std::vector<std::string> GetLabelFiles(const fs::path& label_path, int n_scans) 
     return label_files;
 }
 
-std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadSceneNetDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file, float min_range, float max_range) {
+std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadSceneNetDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file, bool preprocess, float min_range, float max_range) {
     // Read depth
     cv::Mat depth_mat = cv::imread(depth_path, cv::IMREAD_UNCHANGED);
 
@@ -129,7 +129,7 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadSceneNetDept
         } else if (key == "cy") {
             cy = std::stod(value);;
         }
-        }
+    }
 
     std::vector<Eigen::Vector3d> pc_points; // store the 3D points for creating the pointcloud
     std::vector<uint32_t> labels; // store the labels that aren't tossed
@@ -144,7 +144,8 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadSceneNetDept
             float d = depth_data[i];
 
             if (d <= 0 || std::isnan(d)) continue;
-            if (d > max_range || d < min_range) continue; // Skip if out of range
+            if (preprocess)
+                if (d > max_range || d < min_range) continue; // Skip if out of range
 
             float x_norm = (v - cx) / fx;
             float y_norm = (u - cy) / fy;
@@ -168,28 +169,6 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadSceneNetDept
     std::vector<Eigen::Vector3d> points = pc.points_;
 
     return std::make_tuple(points, labels);
-}
-
-void PreProcessCloud(std::vector<Eigen::Vector3d>& points, std::vector<uint32_t>& labels, float min_range, float max_range) {
-    bool invert = true;
-    std::vector<bool> mask = std::vector<bool>(points.size(), invert);
-    size_t pos = 0;
-    for (auto & point : points) {
-        if (point.norm() > max_range || point.norm() < min_range) {
-            mask.at(pos) = false;
-        }
-        ++pos;
-    }
-    size_t counter = 0;
-    for (size_t i = 0; i < points.size(); i++) {
-        if (mask[i]) {
-            points.at(counter) = points.at(i);
-            labels.at(counter) = labels.at(i);
-            ++counter;
-        }
-    }
-    points.resize(counter);
-    labels.resize(counter);
 }
 
 void TransformPoints(std::vector<Eigen::Vector3d>& points, const Eigen::Matrix4d& transformation) {
@@ -274,10 +253,15 @@ SceneNetDataset::SceneNetDataset(const std::string& scenenet_root_dir,
 
 std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Matrix4d> SceneNetDataset::operator[](int idx) const {
     if (rgbd_) {
-        auto [points, semantics] = ReadSceneNetDepthAndLabels(depth_files_[idx], label_files_[idx], fs::absolute(scenenet_sequence_dir_ / "intrinsics.txt"), min_range_, max_range_);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        auto [points, semantics] = ReadSceneNetDepthAndLabels(depth_files_[idx], label_files_[idx], fs::absolute(scenenet_sequence_dir_ / "intrinsics.txt"), preprocess_, min_range_, max_range_);
 
-        // if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
         if (apply_pose_) TransformPoints(points, poses_[idx]);
+
+        auto t2 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed = t2 - t1;
+        if (idx % 1 == 0) std::cout << "Preprocess time: " << elapsed.count()/1e3 << std::endl;
+
         return std::make_tuple(points, semantics, poses_[idx]);
     }
     else {

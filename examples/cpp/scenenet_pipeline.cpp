@@ -119,25 +119,34 @@ int main(int argc, char* argv[]) {
     int index = 0; 
     //modification---------------------------------------------------------------------------------------
     for (const auto& [scan, semantics, pose] : iterable(dataset)) {
+        // INTEGRATE //
+        auto t1_s = std::chrono::high_resolution_clock::now();
         timer.tic();
+        
         Eigen::Vector3d origin = pose.block<3, 1>(0, 3);
         tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; });
-        timer.toc();
+        
+        auto t1_e = std::chrono::high_resolution_clock::now();
 
-        timer.tic();
+
+        // REMDER //
+        auto t2_s = std::chrono::high_resolution_clock::now();
+        
         std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
-
         Eigen::Matrix3d rotation_matrix = pose.block<3,3>(0,0); // extract out translation
-
         // combine ego rotation with coordinate frame change
         Eigen::Quaterniond e_quat(rotation_matrix);
         Eigen::Quaterniond coord_frame_quat(0, 1, 0, 0);
         e_quat = e_quat * coord_frame_quat;
         std::vector<double> rot_quat_vec = {e_quat.x(), e_quat.y(), e_quat.z(), e_quat.w()};
-
         tsdf_volume.Render(origin_vec, rot_quat_vec, index);
         index++;
+        
         timer.toc();
+        auto t2_e = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed1 = t1_e - t1_s;
+        std::chrono::duration<double, std::milli> elapsed2 = t2_e - t2_s;
+        if (index % 1 == 0) std::cout << index << " Integrate time: " << elapsed1.count()/1e3 << " Render time: " << elapsed2.count()/1e3 << std::endl;
     }
 
     // Store the grid results to disks

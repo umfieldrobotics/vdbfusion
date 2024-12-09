@@ -135,7 +135,7 @@ std::vector<Eigen::Vector3d> ReadKITTIVelodyne(const std::string& path) {
     return points; // returned in metric Velodyne coordinate frame
 }
 
-std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadKITTIDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file) {
+std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadKITTIDepthAndLabels(const std::string& depth_path, const std::string& label_path, const fs::path& calib_file, bool preprocess, float min_range, float max_range) {
     // Read tiff
     cv::Mat depth_mat = cv::imread(depth_path, cv::IMREAD_UNCHANGED);
 
@@ -155,11 +155,40 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadKITTIDepthAn
         }
     }
 
-    float fx = 718.856;
-    float fy = 718.856;
-    float cx = 607.1928;
-    float cy = 185.2157;
+    // Read in config file parameters TODO move this out of loop
+    float fx = 0.0, fy = 0.0, cx = 0.0, cy = 0.0;
 
+    std::ifstream calib_in(calib_file, std::ios_base::in);
+
+    if (!calib_in.is_open()) {
+        std::cerr << "Error: Could not open the file " << calib_file << "\n";
+        exit(0);
+    }
+
+    std::string line;
+    while (std::getline(calib_in, line)) {
+        if (line.empty()) continue;
+
+        size_t colonPos = line.find(':');
+
+        std::string key = line.substr(0, colonPos);
+        std::string value = line.substr(colonPos + 1);
+
+        key.erase(0, key.find_first_not_of(" \t"));
+        key.erase(key.find_last_not_of(" \t") + 1);
+        value.erase(0, value.find_first_not_of(" \t"));
+        value.erase(value.find_last_not_of(" \t") + 1);
+
+        if (key == "fx") {
+            fx = std::stod(value);;
+        } else if (key == "fy") {
+            fy = std::stod(value);;
+        } else if (key == "cx") {
+            cx = std::stod(value);;
+        } else if (key == "cy") {
+            cy = std::stod(value);;
+        }
+    }
     std::vector<Eigen::Vector3d> pc_points; // store the 3D points for creating the pointcloud
     std::vector<uint32_t> labels; // store the labels that aren't tossed
 
@@ -172,7 +201,8 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>> ReadKITTIDepthAn
 
             float z = depth_data[i];
             if (z < 0 || std::isnan(z)) z = 0;
-            else if (z > 30) continue; // skip this point if it's out of the max depth range
+            if (preprocess)
+                if (z > max_range || z < min_range) continue; // Skip if out of range
 
             float x = (v - cx) * z / fx;
             float y = (u - cy) * z / fy;
@@ -215,28 +245,6 @@ std::vector<uint32_t> ReadKITTIGroundTruthLabels(const std::string& path) {
     infile.close(); // Close the file
 
     return labels;
-}
-
-void PreProcessCloud(std::vector<Eigen::Vector3d>& points, std::vector<uint32_t>& labels, float min_range, float max_range) {
-    bool invert = true;
-    std::vector<bool> mask = std::vector<bool>(points.size(), invert);
-    size_t pos = 0;
-    for (auto & point : points) {
-        if (point.norm() > max_range || point.norm() < min_range) {
-            mask.at(pos) = false;
-        }
-        ++pos;
-    }
-    size_t counter = 0;
-    for (size_t i = 0; i < points.size(); i++) {
-        if (mask[i]) {
-            points.at(counter) = points.at(i);
-            labels.at(counter) = labels.at(i);
-            ++counter;
-        }
-    }
-    points.resize(counter);
-    labels.resize(counter);
 }
 
 void TransformPoints(std::vector<Eigen::Vector3d>& points, const Eigen::Matrix4d& transformation) {
@@ -343,18 +351,23 @@ KITTIDataset::KITTIDataset(const std::string& kitti_root_dir,
 
 std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Matrix4d> KITTIDataset::operator[](int idx) const {
     if (rgbd_) {
-        auto [points, semantics] = ReadKITTIDepthAndLabels(depth_files_[idx], label_files_[idx], fs::absolute(kitti_sequence_dir_ / "calib.txt"));
+        auto [points, semantics] = ReadKITTIDepthAndLabels(depth_files_[idx], label_files_[idx], fs::absolute(kitti_sequence_dir_ / "intrinsics.txt"), preprocess_, min_range_, max_range_);
 
-        // if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
         if (apply_pose_) TransformPoints(points, poses_[idx]);
         return std::make_tuple(points, semantics, poses_[idx]);
     }
     else {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        
         std::vector<Eigen::Vector3d> points = ReadKITTIVelodyne(scan_files_[idx]);
         std::vector<uint32_t> semantics = ReadKITTIGroundTruthLabels(gt_label_files_[idx]);
 
-        // if (preprocess_) PreProcessCloud(points, semantics, min_range_, max_range_); // if this is enabled, the preprocessing will make the length of the laser scan points shorter than the # of labels
         if (apply_pose_) TransformPoints(points, poses_[idx]);
+
+        auto t2 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed = t2 - t1;
+        if (idx % 25 == 0) std::cout << "Preprocess time: " << elapsed.count()/1e3 << std::endl;
+
         return std::make_tuple(points, semantics, poses_[idx]);
     }
 }
