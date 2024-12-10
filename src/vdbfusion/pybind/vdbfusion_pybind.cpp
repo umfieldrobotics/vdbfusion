@@ -143,10 +143,10 @@ PYBIND11_MODULE(vdbfusion_pybind, m) {
 #endif
         .def(
             "_render",
-            [](VDBVolume& self, const std::vector<double> origin_vec, const std::vector<double> rot_quat_vec, const int index) {
-                self.Render(origin_vec, rot_quat_vec, index);
+            [](VDBVolume& self, const std::vector<double> origin_vec, const std::vector<double> rot_quat_vec, const int index, const int render_img_width, const int render_img_height) {
+                self.Render(origin_vec, rot_quat_vec, index, render_img_width, render_img_height);
             },
-            "origin_vec"_a, "rot_quat_vec"_a, "index"_a)
+            "origin_vec"_a, "rot_quat_vec"_a, "index"_a, "render_img_width"_a, "render_img_height"_a)
         .def(
             "_update_tsdf",
             [](VDBVolume& self, const float& sdf, std::vector<int>& ijk,

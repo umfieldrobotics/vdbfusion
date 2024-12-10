@@ -129,7 +129,7 @@ int main(int argc, char* argv[]) {
         auto t1_e = std::chrono::high_resolution_clock::now();
 
 
-        // REMDER //
+        // RENDER //
         auto t2_s = std::chrono::high_resolution_clock::now();
         
         std::vector<double> origin_vec = {origin(0), origin(1), origin(2)};
@@ -139,7 +139,7 @@ int main(int argc, char* argv[]) {
         Eigen::Quaterniond coord_frame_quat(0, 1, 0, 0);
         e_quat = e_quat * coord_frame_quat;
         std::vector<double> rot_quat_vec = {e_quat.x(), e_quat.y(), e_quat.z(), e_quat.w()};
-        tsdf_volume.Render(origin_vec, rot_quat_vec, index);
+        tsdf_volume.Render(origin_vec, rot_quat_vec, index, scenenet_cfg.render_img_width_, scenenet_cfg.render_img_height_);
         index++;
         
         timer.toc();

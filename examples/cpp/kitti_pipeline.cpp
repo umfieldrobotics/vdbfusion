@@ -124,6 +124,7 @@ int main(int argc, char* argv[]) {
         timer.tic();
         Eigen::Vector3d origin = pose.block<3, 1>(0, 3);
         tsdf_volume.Integrate(scan, semantics, origin, [](float /*unused*/) { return 1.0; });
+        std::cout << "integrated" << std::endl;
         
         auto t1_e = std::chrono::high_resolution_clock::now();
 
@@ -136,7 +137,7 @@ int main(int argc, char* argv[]) {
         Eigen::Quaterniond coord_frame_quat(-0.5, -0.5, 0.5, 0.5);
         e_quat = e_quat * coord_frame_quat;
         std::vector<double> rot_quat_vec = {e_quat.x(), e_quat.y(), e_quat.z(), e_quat.w()};
-        tsdf_volume.Render(origin_vec, rot_quat_vec, index);
+        tsdf_volume.Render(origin_vec, rot_quat_vec, index, kitti_cfg.render_img_width_, kitti_cfg.render_img_height_);
         index++;
 
         timer.toc();

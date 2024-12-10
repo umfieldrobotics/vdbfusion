@@ -22,7 +22,7 @@
 
 # VDBFUSION
 voxel_size: 0.05
-sdf_trunc: 0.3
+sdf_trunc: 0.1
 space_carving: False
 
 # Reconstruction
@@ -35,3 +35,5 @@ preprocess: True
 min_range: 0.1
 max_range: 10.0
 rgbd: True
+render_img_width: 320
+render_img_height: 240

@@ -231,15 +231,15 @@ void VDBVolume::Integrate(const std::vector<Eigen::Vector3d>& points,
     });
 }
 
-void VDBVolume::Render(const std::vector<double> origin_vec, const std::vector<double> rot_quat_vec, const int index) {
+void VDBVolume::Render(const std::vector<double> origin_vec, const std::vector<double> rot_quat_vec, const int index, const int render_img_width, const int render_img_height) {
     // Render image and save as pfm
     std::clog << "\nFrame #" << index << std::endl;
-    const int width = 691;
-    const int height = 256;
+    // const int width = 691;
+    // const int height = 256;
 
     auto timer_imgbuff0 = std::chrono::high_resolution_clock::now();
     BufferT imageBuffer;
-    imageBuffer.init(3 * width * height * sizeof(float)); // needs to be a 3 channel image
+    imageBuffer.init(3 * render_img_width * render_img_height * sizeof(float)); // needs to be a 3 channel image
     auto timer_imgbuff1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed0 = timer_imgbuff1 - timer_imgbuff0;
     std::clog << "Image buffer creation took: " << elapsed0.count() << " ms" << std::endl;
@@ -260,9 +260,9 @@ void VDBVolume::Render(const std::vector<double> origin_vec, const std::vector<d
     // cudaStream_t stream; // Create a CUDA stream to allow for asynchronous copy of pinned CUDA memory.
     // cudaStreamCreate(&stream);
     // handle.deviceUpload(stream, false); // Copy the NanoVDB grid to the GPU asynchronously
-    runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec, rot_quat_vec);
+    runNanoVDB(handle, label_handle, render_img_width, render_img_height, imageBuffer, index, origin_vec, rot_quat_vec);
 #else
-    runNanoVDB(handle, label_handle, width, height, imageBuffer, index, origin_vec, rot_quat_vec);
+    runNanoVDB(handle, label_handle, render_img_width, render_img_height, imageBuffer, index, origin_vec, rot_quat_vec);
 #endif
 
     auto timer_render1 = std::chrono::high_resolution_clock::now();

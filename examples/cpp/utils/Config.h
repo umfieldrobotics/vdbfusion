@@ -56,6 +56,8 @@ struct KITTIConfig {
     float min_range_;
     float max_range_;
     bool rgbd_;
+    int render_img_width_;
+    int render_img_height_;
 
     static inline KITTIConfig LoadFromYAML(const std::string& path) {
         std::ifstream config_file(path, std::ios_base::in);
@@ -65,7 +67,9 @@ struct KITTIConfig {
                            config["preprocess"].as<bool>(),  //
                            config["min_range"].as<float>(),  //
                            config["max_range"].as<float>(),
-                           config["rgbd"].as<bool>()};
+                           config["rgbd"].as<bool>(),
+                           config["render_img_width"].as<int>(),
+                           config["render_img_height"].as<int>()};
     }
 };
 
@@ -75,6 +79,8 @@ struct SceneNetConfig {
     float min_range_;
     float max_range_;
     bool rgbd_;
+    int render_img_width_;
+    int render_img_height_;
 
     static inline SceneNetConfig LoadFromYAML(const std::string& path) {
         std::ifstream config_file(path, std::ios_base::in);
@@ -84,7 +90,9 @@ struct SceneNetConfig {
                            config["preprocess"].as<bool>(),  //
                            config["min_range"].as<float>(),  //
                            config["max_range"].as<float>(),
-                           config["rgbd"].as<bool>()};
+                           config["rgbd"].as<bool>(),
+                           config["render_img_width"].as<int>(),
+                           config["render_img_height"].as<int>()};
     }
 };
 }  // namespace datasets
