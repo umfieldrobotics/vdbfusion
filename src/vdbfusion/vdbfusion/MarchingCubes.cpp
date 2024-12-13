@@ -59,7 +59,7 @@ VDBVolume::ExtractTriangleMesh(bool fill_holes, float min_weight) const {
     std::vector<Eigen::Vector3i> triangles;
     std::vector<int> tri_labels;
 
-    double half_voxel_length = voxel_size_ * 0.5;
+    double half_voxel_length = voxel_size_ * 0.2;
     // Map of "edge_index = (x, y, z, 0) + edge_shift" to "global vertex index"
     std::unordered_map<Eigen::Vector4i, int, hash_eigen<Eigen::Vector4i>, std::equal_to<>,
                        Eigen::aligned_allocator<std::pair<const Eigen::Vector4i, int>>>
