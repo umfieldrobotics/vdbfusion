@@ -355,7 +355,6 @@ std::tuple<std::vector<Eigen::Vector3d>, std::vector<uint32_t>, Eigen::Matrix4d>
         auto [points, semantics] = ReadKITTIDepthAndLabels(depth_files_[idx], label_files_[idx], fs::absolute(kitti_sequence_dir_ / "intrinsics.txt"), preprocess_, min_range_, max_range_);
 
         if (apply_pose_) TransformPoints(points, poses_[idx]);
-        std::cout << points.size() << " " << semantics.size() << " " << poses_[idx] << std::endl;
         return std::make_tuple(points, semantics, poses_[idx]);
     }
     else {

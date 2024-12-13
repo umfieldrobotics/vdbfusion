@@ -34,6 +34,6 @@ apply_pose: True
 preprocess: True
 min_range: 2.0
 max_range: 30.0
-rgbd: True
+rgbd: False
 render_img_width: 691
 render_img_height: 256
